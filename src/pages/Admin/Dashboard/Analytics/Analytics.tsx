@@ -38,7 +38,7 @@ export default function Analytics() {
       <h1 className="font-display text-2xl mb-6">Analytics</h1>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <StatCard icon={Users} label="Total users" value={users?.Users.length ?? 0} />
+        <StatCard icon={Users} label="Total users" value={users?.data.length ?? 0} />
         <StatCard icon={CalendarDays} label="Total events" value={events?.Events.length ?? 0} />
         <StatCard icon={MapPin} label="Total venues" value={venues?.Venues.length ?? 0} />
         <StatCard icon={Ticket} label="Tickets sold" value={ticketsSold} />
