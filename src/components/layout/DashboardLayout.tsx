@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
-import { useSelector, useDispatch } from "react-redux";
+import { useDispatch } from "react-redux";
 import { Menu, X, ArrowLeft, LogOut, CalendarDays, ChevronsLeft, ChevronsRight } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { RootState } from "../../app/store";
 import { logout } from "../../reducers/login/userSlice";
 
 export type DashboardNavItem = {
@@ -35,7 +34,6 @@ export default function DashboardLayout({ nav, title }: { nav: DashboardNavItem[
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const dispatch = useDispatch();
-  const user = useSelector((state: RootState) => state.user.user);
 
   const sidebar = (isCollapsed: boolean) => (
     <div className="flex flex-col h-full">
@@ -134,9 +132,6 @@ export default function DashboardLayout({ nav, title }: { nav: DashboardNavItem[
       )}
 
       <main className="flex-1 min-w-0 px-4 py-8 md:px-8 md:h-full md:overflow-y-auto">
-        <p className="text-sm text-base-content/60 mb-6">
-          Signed in as {user?.firstName} {user?.lastName}
-        </p>
         <Outlet />
       </main>
     </div>

@@ -1,5 +1,5 @@
 import { useMemo, useState, useRef } from "react";
-import { Search } from "lucide-react";
+import { Search, SlidersHorizontal } from "lucide-react";
 import { useGetAllRSVPsQuery, useUpdateRSVPStatusMutation } from "../../reducers/rsvp/rsvpAPI";
 import type { TRSVP, TRSVPStatus } from "../../reducers/rsvp/rsvpAPI";
 import { useGetAllEventsQuery } from "../../reducers/events/eventsAPI";
@@ -47,6 +47,7 @@ export default function RSVPsTable() {
   const [sortBy, setSortBy] = useState<SortOption>("newest");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
 
   const touchStartX = useRef<number | null>(null);
 
@@ -136,51 +137,38 @@ export default function RSVPsTable() {
 
       {!isLoading && !error && !!reservations?.length && (
         <>
-          <div className="stats stats-vertical sm:stats-horizontal shadow w-full mb-6 bg-base-100 border border-base-300">
-            <div className="stat py-3 px-4">
-              <div className="stat-title text-xs">Total</div>
-              <div className="stat-value text-xl">{stats.total}</div>
-            </div>
-            <div className="stat py-3 px-4">
-              <div className="stat-title text-xs">Paid</div>
-              <div className="stat-value text-xl text-success">{stats.paid}</div>
-            </div>
-            <div className="stat py-3 px-4">
-              <div className="stat-title text-xs">Unpaid</div>
-              <div className="stat-value text-xl text-base-content/60">{stats.unpaid}</div>
-            </div>
-            <div className="stat py-3 px-4">
-              <div className="stat-title text-xs">Pending</div>
-              <div className="stat-value text-xl text-warning">{stats.pending}</div>
-            </div>
-            <div className="stat py-3 px-4">
-              <div className="stat-title text-xs">Booked</div>
-              <div className="stat-value text-xl text-success">{stats.booked}</div>
-            </div>
-            <div className="stat py-3 px-4">
-              <div className="stat-title text-xs">Cancelled</div>
-              <div className="stat-value text-xl text-error">{stats.cancelled}</div>
-            </div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm mb-4 text-base-content/70">
+            <span>Total <b className="text-base-content">{stats.total}</b></span>
+            <span className="text-base-content/30">·</span>
+            <span>Paid <b className="text-success">{stats.paid}</b></span>
+            <span className="text-base-content/30">·</span>
+            <span>Unpaid <b className="text-base-content">{stats.unpaid}</b></span>
+            <span className="text-base-content/30">·</span>
+            <span>Pending <b className="text-warning">{stats.pending}</b></span>
+            <span className="text-base-content/30">·</span>
+            <span>Booked <b className="text-success">{stats.booked}</b></span>
+            <span className="text-base-content/30">·</span>
+            <span>Cancelled <b className="text-error">{stats.cancelled}</b></span>
           </div>
 
-          <div role="tablist" className="tabs tabs-boxed w-fit mb-4">
-            <button
-              role="tab"
-              className={`tab ${tab === "table" ? "tab-active" : ""}`}
-              onClick={() => setTab("table")}
-            >
-              Table view
-            </button>
-            <button
-              role="tab"
-              className={`tab ${tab === "grouped" ? "tab-active" : ""}`}
-              onClick={() => setTab("grouped")}
-            >
-              By event
-            </button>
-          </div>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-2">
+            <div role="tablist" className="tabs tabs-boxed w-fit shrink-0">
+              <button
+                role="tab"
+                className={`tab ${tab === "table" ? "tab-active" : ""}`}
+                onClick={() => setTab("table")}
+              >
+                Table view
+              </button>
+              <button
+                role="tab"
+                className={`tab ${tab === "grouped" ? "tab-active" : ""}`}
+                onClick={() => setTab("grouped")}
+              >
+                By event
+              </button>
+            </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 mb-2">
             <label className="input input-bordered flex items-center gap-2 flex-1">
               <Search size={16} className="text-base-content/50" />
               <input
@@ -190,49 +178,59 @@ export default function RSVPsTable() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </label>
-            <select
-              className="select select-bordered w-full sm:w-48"
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortOption)}
+
+            <button
+              className={`btn btn-sm shrink-0 ${showFilters || dateFrom || dateTo ? "btn-primary btn-soft" : "btn-ghost"}`}
+              onClick={() => setShowFilters((v) => !v)}
             >
-              <option value="newest">Newest first</option>
-              <option value="oldest">Oldest first</option>
-              <option value="amount-high">Amount: high to low</option>
-              <option value="amount-low">Amount: low to high</option>
-            </select>
+              <SlidersHorizontal size={14} />
+              Filters
+            </button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 mb-4">
-            <label className="text-sm text-base-content/60 flex items-center gap-2">
-              From
-              <input
-                type="date"
-                className="input input-bordered input-sm"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-              />
-            </label>
-            <label className="text-sm text-base-content/60 flex items-center gap-2">
-              To
-              <input
-                type="date"
-                className="input input-bordered input-sm"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-              />
-            </label>
-            {(dateFrom || dateTo) && (
-              <button
-                className="btn btn-ghost btn-xs"
-                onClick={() => {
-                  setDateFrom("");
-                  setDateTo("");
-                }}
+          {showFilters && (
+            <div className="flex flex-wrap items-center gap-3 mb-4 p-3 bg-base-100 border border-base-300 rounded-box">
+              <select
+                className="select select-bordered select-sm w-full sm:w-48"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortOption)}
               >
-                Clear dates
-              </button>
-            )}
-          </div>
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="amount-high">Amount: high to low</option>
+                <option value="amount-low">Amount: low to high</option>
+              </select>
+              <label className="text-sm text-base-content/60 flex items-center gap-2">
+                From
+                <input
+                  type="date"
+                  className="input input-bordered input-sm"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                />
+              </label>
+              <label className="text-sm text-base-content/60 flex items-center gap-2">
+                To
+                <input
+                  type="date"
+                  className="input input-bordered input-sm"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                />
+              </label>
+              {(dateFrom || dateTo) && (
+                <button
+                  className="btn btn-ghost btn-xs"
+                  onClick={() => {
+                    setDateFrom("");
+                    setDateTo("");
+                  }}
+                >
+                  Clear dates
+                </button>
+              )}
+            </div>
+          )}
 
           <div onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
             {visible.length === 0 && (
