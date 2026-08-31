@@ -17,7 +17,7 @@ export default function EventHistory() {
   events?.Events.forEach((e) => (eventMap[e.EventID] = e));
 
   const today = new Date().toISOString().slice(0, 10);
-  const past = (rsvps?.RSVPs ?? [])
+  const past = (rsvps?.reservations ?? [])
     .map((r) => eventMap[r.EventID])
     .filter((e): e is TEvents => !!e && e.date < today);
 

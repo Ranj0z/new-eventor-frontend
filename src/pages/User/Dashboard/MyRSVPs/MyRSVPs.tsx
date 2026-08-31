@@ -21,12 +21,12 @@ export default function MyRSVPs() {
 
       {isLoading && <ListSkeleton />}
       {error && <p className="text-error">Couldn't load your RSVPs.</p>}
-      {!isLoading && !error && data?.RSVPs.length === 0 && (
+      {!isLoading && !error && data?.reservations.length === 0 && (
         <p className="text-base-content/60">No RSVPs yet — browse events to book one.</p>
       )}
 
       <div className="space-y-3">
-        {data?.RSVPs.map((r) => (
+        {data?.reservations.map((r) => (
           <div key={r.RSVPID} className="bg-base-100 border border-base-300 rounded-box p-4 text-sm flex items-center justify-between">
             <div>
               <p className="font-medium">RSVP #{r.RSVPID}</p>

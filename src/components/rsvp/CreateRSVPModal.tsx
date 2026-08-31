@@ -66,7 +66,7 @@ export default function CreateRSVPModal({ event, onClose, reloadEvents }: Create
         email: rsvpForm.email,
         totalAmount: event.ticketsPrice,
       }).unwrap();
-      setCreatedRSVP(res.data);
+      setCreatedRSVP(res.reservations);
       reloadEvents();
       setStep(event.ticketsPrice > 0 ? "payment" : "done");
     } catch {

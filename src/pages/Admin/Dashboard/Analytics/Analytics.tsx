@@ -29,8 +29,8 @@ export default function Analytics() {
   const { data: rsvps } = useGetAllRSVPsQuery();
   const { data: payments } = useGetAllPaymentsQuery();
 
-  const totalRevenue = (payments?.Payments ?? []).reduce((sum, p) => sum + p.amount, 0);
-  const bookedRSVPs = (rsvps?.RSVPs ?? []).filter((r) => r.RSVPStatus === "Booked").length;
+  const totalRevenue = (payments?.allPayments ?? []).reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
+  const bookedRSVPs = (rsvps?.reservations ?? []).filter((r) => r.RSVPStatus === "Booked").length;
   const ticketsSold = (events?.Events ?? []).reduce((sum, e) => sum + e.soldTickets, 0);
 
   return (
