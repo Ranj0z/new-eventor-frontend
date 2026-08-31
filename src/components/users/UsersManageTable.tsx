@@ -15,6 +15,8 @@ export default function UsersManageTable() {
   const { data, isLoading, error } = useGetAllUsersQuery();
   const [editing, setEditing] = useState<TUser | null>(null);
 
+  const users = data?.data ?? [];
+
   return (
     <section>
       <h1 className="font-display text-2xl mb-6">Users</h1>
@@ -22,7 +24,11 @@ export default function UsersManageTable() {
       {isLoading && <TableSkeleton columns={5} />}
       {error && <p className="text-error">Couldn't load users.</p>}
 
-      {!!data?.Users.length && (
+      {!isLoading && !error && users.length === 0 && (
+        <p className="text-base-content/60">No users found.</p>
+      )}
+
+      {!!users.length && (
         <div className="overflow-x-auto bg-base-100 border border-base-300 rounded-box">
           <table className="table">
             <thead>
@@ -35,7 +41,7 @@ export default function UsersManageTable() {
               </tr>
             </thead>
             <tbody>
-              {data.Users.map((u) => (
+              {users.map((u) => (
                 <tr key={u.UserID} className="hover cursor-pointer" onClick={() => setEditing(u)}>
                   <td>
                     {u.firstName} {u.lastName}

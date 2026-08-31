@@ -26,7 +26,8 @@ export const usersAPI = createApi({
   baseQuery: authBaseQuery(),
   tagTypes: ["Users"],
   endpoints: (builder) => ({
-    getAllUsers: builder.query<{ Users: TUser[] }, void>({
+    // Backend returns { data: TUser[] } — see getAllUsersController.
+    getAllUsers: builder.query<{ data: TUser[] }, void>({
       query: () => "/User/allUsers",
       providesTags: ["Users"],
     }),
