@@ -22,7 +22,7 @@ export default function PaymentsPanel() {
     <section>
       <h1 className="font-display text-2xl mb-6">Payments</h1>
 
-      {isLoading && <TableSkeleton columns={8} />}
+      {isLoading && <TableSkeleton columns={7} />}
       {error && <p className="text-error">Couldn't load payments.</p>}
       {!isLoading && !error && payments?.length === 0 && (
         <p className="text-base-content/60">No payments recorded yet.</p>
@@ -36,7 +36,6 @@ export default function PaymentsPanel() {
                 <th>RSVP</th>
                 <th>Method</th>
                 <th>Amount</th>
-                <th>Balance</th>
                 <th>Date</th>
                 <th>Status</th>
                 <th>Paid on RSVP</th>
@@ -46,15 +45,25 @@ export default function PaymentsPanel() {
             <tbody>
               {payments.map((p) => {
                 const paid = rsvpMap[p.RSVPID];
+                const statusBadgeClass =
+                  p.paymentStatus === "Completed"
+                    ? "badge-success"
+                    : p.paymentStatus === "Failed"
+                      ? "badge-error"
+                      : "badge-ghost";
                 return (
                   <tr key={p.PaymentID}>
                     <td>#{p.RSVPID}</td>
                     <td>{p.paymentMethod}</td>
                     <td>KES {Number(p.amount).toLocaleString()}</td>
-                    <td>KES {Number(p.balance).toLocaleString()}</td>
                     <td>{p.paymentDate}</td>
                     <td>
-                      <span className="badge badge-sm badge-ghost">{p.paymentStatus}</span>
+                      <span
+                        className={`badge badge-sm ${statusBadgeClass}`}
+                        title={p.paymentStatus === "Failed" ? (p.failureReason ?? undefined) : undefined}
+                      >
+                        {p.paymentStatus}
+                      </span>
                     </td>
                     <td>{paid ? "Yes" : "No"}</td>
                     <td className="text-right">

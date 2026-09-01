@@ -1,20 +1,29 @@
 import { createApi } from "@reduxjs/toolkit/query/react";
 import { authBaseQuery } from "../../utils/authBaseQuery";
 
-export type TPaymentStatus = "Pending" | "In Progress" | "Completed";
+// "In Progress" removed — migration 0021 dropped it from the backend enum.
+export type TPaymentStatus = "Pending" | "Completed" | "Failed";
 
 export type TPayment = {
   PaymentID: number;
   RSVPID: number;
   EventID: number;
   amount: string;
-  balance: string;
+  // balance removed — migration 0021 dropped the column from the backend row.
+  failureReason: string | null;
   paymentStatus: TPaymentStatus;
   paymentDate: string;
   paymentMethod: string;
   TransactionID: string;
   created_at: string;
   updated_at: string | null;
+};
+
+export type TPaymentInitiateResponse = { paymentId: number };
+
+export type TPaymentStatusResponse = {
+  status: "pending" | "success" | "failed";
+  reason?: string;
 };
 
 export const paymentsAPI = createApi({
@@ -30,11 +39,28 @@ export const paymentsAPI = createApi({
       query: (id) => `/payment/${id}`,
       providesTags: ["Payments"],
     }),
-    // Payments are never updated once created — api-endpoints.md confirms
-    // there is no update/status endpoint for this resource. "Paid" state
-    // lives on the RSVP instead (TRSVP.paid + rsvpAPI's markRSVPPaid/
-    // markRSVPUnpaid) — see eventor-frontend-types.md / rsvpAPI.ts.
+    // M-Pesa STK push initiation. Amount is derived server-side from the
+    // RSVP/event, never sent from the client.
+    initiatePayment: builder.mutation<TPaymentInitiateResponse, { rsvpId: number; phoneNumber: string }>({
+      query: ({ rsvpId, phoneNumber }) => ({
+        url: `/payments/rsvp/${rsvpId}/initiate`,
+        method: "POST",
+        body: { phoneNumber },
+      }),
+      invalidatesTags: ["Payments"],
+    }),
+    // Polled from PaymentModal until status settles or the 90s window elapses.
+    // This slice can't invalidate rsvpAPI's "RSVP" tag (separate createApi
+    // instance) — PaymentModal dispatches rsvpAPI.util.invalidateTags itself.
+    getPaymentStatus: builder.query<TPaymentStatusResponse, number>({
+      query: (paymentId) => `/payments/${paymentId}/status`,
+    }),
   }),
 });
 
-export const { useGetAllPaymentsQuery, useGetPaymentByIdQuery } = paymentsAPI;
+export const {
+  useGetAllPaymentsQuery,
+  useGetPaymentByIdQuery,
+  useInitiatePaymentMutation,
+  useGetPaymentStatusQuery,
+} = paymentsAPI;
