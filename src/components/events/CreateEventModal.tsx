@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import type { TCategory, TEvents } from "../../reducers/events/eventsAPI";
 import { useCreateEventMutation, useUpdateEventMutation } from "../../reducers/events/eventsAPI";
 import type { TVenue } from "../../reducers/venues/venuesAPI";
+import ImageUploadField from "../shared/ImageUploadField";
 
 const CATEGORIES: TCategory[] = ["Tech", "Data Science", "Web Dev"];
 
@@ -155,15 +156,12 @@ export default function CreateEventModal({ event, venues, onClose }: CreateEvent
             </label>
           </div>
 
-          <label className="text-sm block">
-            Image URL
-            <input
-              className="input input-bordered w-full mt-1"
-              value={form.image_url}
-              onChange={(e) => setForm({ ...form, image_url: e.target.value })}
-              placeholder="https://..."
-            />
-          </label>
+          <ImageUploadField
+            label="Event photo"
+            value={form.image_url}
+            onChange={(url) => setForm({ ...form, image_url: url })}
+            folder="event"
+          />
 
           {error && <p className="text-error text-sm">Couldn't save the event. Try again.</p>}
 

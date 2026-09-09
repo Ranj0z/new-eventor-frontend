@@ -10,6 +10,7 @@ import { venuesAPI } from "../reducers/venues/venuesAPI";
 import { rsvpAPI } from "../reducers/rsvp/rsvpAPI";
 import { ticketsAPI } from "../reducers/tickets/ticketsAPI";
 import { paymentsAPI } from "../reducers/payments/paymentsAPI";
+import { uploadsAPI } from "../reducers/uploads/uploadsAPI";
 
 // Only the auth session persists to localStorage — every RTK Query cache
 // refetches fresh on load. See eventor-state-architecture.md §5.
@@ -29,6 +30,7 @@ const rootReducer = combineReducers({
   [rsvpAPI.reducerPath]: rsvpAPI.reducer,
   [ticketsAPI.reducerPath]: ticketsAPI.reducer,
   [paymentsAPI.reducerPath]: paymentsAPI.reducer,
+  [uploadsAPI.reducerPath]: uploadsAPI.reducer,
 });
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);
@@ -43,7 +45,8 @@ export const store = configureStore({
       .concat(venuesAPI.middleware)
       .concat(rsvpAPI.middleware)
       .concat(ticketsAPI.middleware)
-      .concat(paymentsAPI.middleware),
+      .concat(paymentsAPI.middleware)
+      .concat(uploadsAPI.middleware),
 });
 
 export const persistedStore = persistStore(store);

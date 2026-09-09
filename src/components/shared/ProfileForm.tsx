@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from "react-redux";
 import type { RootState } from "../../app/store";
 import { useUpdateUserMutation } from "../../reducers/users/usersAPI";
 import { loginSuccess } from "../../reducers/login/userSlice";
+import ImageUploadField from "./ImageUploadField";
 
 // Same fields for admin, host and user — role/verification aren't editable
 // here, that's an admin-only action on UserModal. Never touches password or
@@ -76,15 +77,12 @@ export default function ProfileForm() {
         />
       </label>
 
-      <label className="text-sm block">
-        Profile image URL
-        <input
-          className="input input-bordered w-full mt-1"
-          value={form.image_url ?? ""}
-          onChange={(e) => setForm({ ...form, image_url: e.target.value })}
-          placeholder="https://..."
-        />
-      </label>
+      <ImageUploadField
+        label="Profile photo"
+        value={form.image_url}
+        onChange={(url) => setForm({ ...form, image_url: url })}
+        folder="profile"
+      />
 
       <label className="text-sm block">
         Email

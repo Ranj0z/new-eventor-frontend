@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { X } from "lucide-react";
 import type { TVenue } from "../../reducers/venues/venuesAPI";
 import { useCreateVenueMutation, useUpdateVenueMutation } from "../../reducers/venues/venuesAPI";
+import ImageUploadField from "../shared/ImageUploadField";
 
 type VenueModalProps = {
   venue: TVenue | null;
@@ -75,15 +76,12 @@ export default function VenueModal({ venue, onClose }: VenueModalProps) {
             />
           </label>
 
-          <label className="text-sm block">
-            Image URL
-            <input
-              className="input input-bordered w-full mt-1"
-              value={form.image_url}
-              onChange={(e) => setForm({ ...form, image_url: e.target.value })}
-              placeholder="https://..."
-            />
-          </label>
+          <ImageUploadField
+            label="Venue photo"
+            value={form.image_url}
+            onChange={(url) => setForm({ ...form, image_url: url })}
+            folder="venue"
+          />
 
           {error && <p className="text-error text-sm">Couldn't save the venue. Try again.</p>}
 
