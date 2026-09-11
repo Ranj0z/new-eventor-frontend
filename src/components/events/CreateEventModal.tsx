@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import type { TCategory, TEvents } from "../../reducers/events/eventsAPI";
 import { useCreateEventMutation, useUpdateEventMutation } from "../../reducers/events/eventsAPI";
 import type { TVenue } from "../../reducers/venues/venuesAPI";
+import { useUploadImageMutation } from "../../reducers/uploads/uploadsAPI";
 import ImageUploadField from "../shared/ImageUploadField";
 
 const CATEGORIES: TCategory[] = ["Tech", "Data Science", "Web Dev"];
@@ -16,7 +17,9 @@ type CreateEventModalProps = {
 export default function CreateEventModal({ event, venues, onClose }: CreateEventModalProps) {
   const [createEvent, { isLoading: creating }] = useCreateEventMutation();
   const [updateEvent, { isLoading: updating }] = useUpdateEventMutation();
+  const [uploadImage, { isLoading: uploading }] = useUploadImageMutation();
   const [error, setError] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
 
   const [form, setForm] = useState({
     title: event?.title ?? "",
@@ -27,19 +30,30 @@ export default function CreateEventModal({ event, venues, onClose }: CreateEvent
     time: event?.time ?? "",
     ticketsPrice: event?.ticketsPrice ?? 0,
     totalTickets: event?.totalTickets ?? 100,
-    image_url: event?.image_url ?? "",
   });
 
-  const isLoading = creating || updating;
+  const isLoading = creating || updating || uploading;
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(false);
+
+    let imagePatch: { image_url: string; image_public_id: string } | Record<string, never> = {};
+    if (pendingFile) {
+      try {
+        const { url, public_id } = await uploadImage({ file: pendingFile, folder: "event" }).unwrap();
+        imagePatch = { image_url: url, image_public_id: public_id };
+      } catch {
+        setError(true);
+        return;
+      }
+    }
+
     try {
       if (event) {
-        await updateEvent({ id: event.EventID, ...form }).unwrap();
+        await updateEvent({ id: event.EventID, ...form, ...imagePatch }).unwrap();
       } else {
-        await createEvent(form).unwrap();
+        await createEvent({ ...form, ...imagePatch }).unwrap();
       }
       onClose();
     } catch {
@@ -158,15 +172,15 @@ export default function CreateEventModal({ event, venues, onClose }: CreateEvent
 
           <ImageUploadField
             label="Event photo"
-            value={form.image_url}
-            onChange={(url) => setForm({ ...form, image_url: url })}
+            value={event?.image_url ?? null}
+            onFileSelect={setPendingFile}
             folder="event"
           />
 
           {error && <p className="text-error text-sm">Couldn't save the event. Try again.</p>}
 
           <button className="btn btn-primary w-full" disabled={isLoading}>
-            {isLoading ? "Saving..." : event ? "Save changes" : "Create event"}
+            {uploading ? "Uploading..." : isLoading ? "Saving..." : event ? "Save changes" : "Create event"}
           </button>
         </form>
       </div>

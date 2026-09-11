@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { X } from "lucide-react";
 import type { TVenue } from "../../reducers/venues/venuesAPI";
 import { useCreateVenueMutation, useUpdateVenueMutation } from "../../reducers/venues/venuesAPI";
+import { useUploadImageMutation } from "../../reducers/uploads/uploadsAPI";
 import ImageUploadField from "../shared/ImageUploadField";
 
 type VenueModalProps = {
@@ -12,23 +13,36 @@ type VenueModalProps = {
 export default function VenueModal({ venue, onClose }: VenueModalProps) {
   const [createVenue, { isLoading: creating }] = useCreateVenueMutation();
   const [updateVenue, { isLoading: updating }] = useUpdateVenueMutation();
+  const [uploadImage, { isLoading: uploading }] = useUploadImageMutation();
   const [error, setError] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
 
   const [form, setForm] = useState({
     venueName: venue?.venueName ?? "",
     address: venue?.address ?? "",
     capacity: venue?.capacity ?? 0,
-    image_url: venue?.image_url ?? "",
   });
 
-  const isLoading = creating || updating;
+  const isLoading = creating || updating || uploading;
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(false);
+
+    let imagePatch: { image_url: string; image_public_id: string } | Record<string, never> = {};
+    if (pendingFile) {
+      try {
+        const { url, public_id } = await uploadImage({ file: pendingFile, folder: "venue" }).unwrap();
+        imagePatch = { image_url: url, image_public_id: public_id };
+      } catch {
+        setError(true);
+        return;
+      }
+    }
+
     try {
-      if (venue) await updateVenue({ id: venue.VenueID, ...form }).unwrap();
-      else await createVenue(form).unwrap();
+      if (venue) await updateVenue({ id: venue.VenueID, ...form, ...imagePatch }).unwrap();
+      else await createVenue({ ...form, ...imagePatch }).unwrap();
       onClose();
     } catch {
       setError(true);
@@ -78,15 +92,15 @@ export default function VenueModal({ venue, onClose }: VenueModalProps) {
 
           <ImageUploadField
             label="Venue photo"
-            value={form.image_url}
-            onChange={(url) => setForm({ ...form, image_url: url })}
+            value={venue?.image_url ?? null}
+            onFileSelect={setPendingFile}
             folder="venue"
           />
 
           {error && <p className="text-error text-sm">Couldn't save the venue. Try again.</p>}
 
           <button className="btn btn-primary w-full" disabled={isLoading}>
-            {isLoading ? "Saving..." : venue ? "Save changes" : "Add venue"}
+            {uploading ? "Uploading..." : isLoading ? "Saving..." : venue ? "Save changes" : "Add venue"}
           </button>
         </form>
       </div>

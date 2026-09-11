@@ -17,6 +17,7 @@ export type TUser = {
   role: TRole;
   isVerified: boolean;
   image_url: string | null;
+  image_public_id: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 };

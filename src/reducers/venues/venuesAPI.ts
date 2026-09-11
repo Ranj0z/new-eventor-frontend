@@ -8,6 +8,7 @@ export type TVenue = {
   capacity: number | null;
   createdAt: string | null;
   image_url: string | null;
+  image_public_id: string | null;
 };
 
 export const venuesAPI = createApi({

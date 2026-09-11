@@ -1,5 +1,4 @@
-import { useRef, useState, type ChangeEvent } from "react";
-import { useUploadImageMutation } from "../../reducers/uploads/uploadsAPI";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import type { TUploadFolder } from "../../reducers/uploads/uploadsAPI";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -7,22 +6,30 @@ const MAX_BYTES = 5 * 1024 * 1024;
 
 type ImageUploadFieldProps = {
   label: string;
-  value: string | null;
-  onChange: (url: string) => void;
+  value: string | null; // existing (already-uploaded) image url, if any
+  onFileSelect: (file: File | null) => void;
   folder: TUploadFolder;
 };
 
-// Uploads immediately on file select (see eventor-image-uploads-summary.md).
-// Validation here mirrors the backend's allowlist/size cap for fast
-// feedback only — the backend still enforces both; this is UX, not the
-// trust boundary.
-export default function ImageUploadField({ label, value, onChange, folder }: ImageUploadFieldProps) {
-  const [uploadImage, { isLoading }] = useUploadImageMutation();
+// Dumb picker only: validates and previews locally, then hands the raw
+// File up via onFileSelect. It does NOT call uploadImage — the owning
+// form uploads on submit (see eventor-image-uploads-summary.md, "upload
+// happens only when the form is actually saved"). `folder` is kept as a
+// prop so the parent's submit handler and this field agree on where the
+// eventual upload call will send the file.
+export default function ImageUploadField({ label, value, onFileSelect }: ImageUploadFieldProps) {
   const [preview, setPreview] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleFile = async (e: ChangeEvent<HTMLInputElement>) => {
+  // Revoke the object URL when it's replaced or the component unmounts.
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview);
+    };
+  }, [preview]);
+
+  const handleFile = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setLocalError(null);
@@ -38,19 +45,9 @@ export default function ImageUploadField({ label, value, onChange, folder }: Ima
       return;
     }
 
-    const objectUrl = URL.createObjectURL(file);
-    setPreview(objectUrl);
-
-    try {
-      const { url } = await uploadImage({ file, folder }).unwrap();
-      onChange(url);
-    } catch {
-      setLocalError("Upload failed. Try again.");
-    } finally {
-      URL.revokeObjectURL(objectUrl);
-      setPreview(null);
-      if (inputRef.current) inputRef.current.value = "";
-    }
+    if (preview) URL.revokeObjectURL(preview);
+    setPreview(URL.createObjectURL(file));
+    onFileSelect(file);
   };
 
   const displayImage = preview ?? value ?? null;
@@ -68,10 +65,8 @@ export default function ImageUploadField({ label, value, onChange, folder }: Ima
           accept="image/jpeg,image/png,image/webp"
           className="file-input file-input-bordered w-full"
           onChange={handleFile}
-          disabled={isLoading}
         />
       </div>
-      {isLoading && <p className="text-xs opacity-60 mt-1">Uploading...</p>}
       {localError && <p className="text-error text-xs mt-1">{localError}</p>}
     </label>
   );

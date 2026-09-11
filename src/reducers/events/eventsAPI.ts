@@ -17,6 +17,7 @@ export type TEvents = {
   createdAt: string;
   updatedAt: string | null;
   image_url: string | null;
+  image_public_id: string | null;
 };
 
 export const eventsAPI = createApi({
