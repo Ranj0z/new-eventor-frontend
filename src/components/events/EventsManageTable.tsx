@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { useSelector } from "react-redux";
+import type { RootState } from "../../app/store";
 import { Plus, Pencil, Trash2, Search } from "lucide-react";
-import { useGetAllEventsQuery, useDeleteEventMutation } from "../../reducers/events/eventsAPI";
+import { useGetAllEventsQuery, useGetEventsByHostIdQuery, useDeleteEventMutation } from "../../reducers/events/eventsAPI";
 import type { TEvents } from "../../reducers/events/eventsAPI";
 import { useGetAllVenuesQuery } from "../../reducers/venues/venuesAPI";
 import CreateEventModal from "./CreateEventModal";
@@ -17,11 +19,21 @@ const SORTERS: Record<SortOption, (a: TEvents, b: TEvents) => number> = {
   za: (a, b) => b.title.localeCompare(a.title),
 };
 
-// getAllEvents is scoped server-side to the caller's own events for a host
-// token, per eventor-architecture-decisions.md §4/§7 — so admin and host
-// dashboards can share this exact component, same query, same modal.
+// This component is shared by the admin and host dashboards, but the two
+// roles see different data: /event/allevents is unfiltered (no host/role
+// scoping happens server-side), so a host token must instead call
+// /event/host/:id to see only the events they organize. Never reached by
+// role "User".
 export default function EventsManageTable() {
-  const { data, isLoading, error } = useGetAllEventsQuery();
+  const currentUser = useSelector((state: RootState) => state.user.user);
+  const isAdmin = currentUser?.role === "admin";
+
+  const allEventsResult = useGetAllEventsQuery(undefined, { skip: !isAdmin });
+  const hostEventsResult = useGetEventsByHostIdQuery(currentUser?.UserID ?? 0, {
+    skip: isAdmin || !currentUser,
+  });
+
+  const { data, isLoading, error } = isAdmin ? allEventsResult : hostEventsResult;
   const { data: venuesData } = useGetAllVenuesQuery();
   const [deleteEvent] = useDeleteEventMutation();
   const [editing, setEditing] = useState<TEvents | "new" | null>(null);

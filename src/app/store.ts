@@ -9,6 +9,7 @@ import { eventsAPI } from "../reducers/events/eventsAPI";
 import { venuesAPI } from "../reducers/venues/venuesAPI";
 import { rsvpAPI } from "../reducers/rsvp/rsvpAPI";
 import { ticketsAPI } from "../reducers/tickets/ticketsAPI";
+import { ticketTypesAPI } from "../reducers/ticketTypes/ticketTypesAPI";
 import { paymentsAPI } from "../reducers/payments/paymentsAPI";
 import { uploadsAPI } from "../reducers/uploads/uploadsAPI";
 
@@ -29,6 +30,7 @@ const rootReducer = combineReducers({
   [venuesAPI.reducerPath]: venuesAPI.reducer,
   [rsvpAPI.reducerPath]: rsvpAPI.reducer,
   [ticketsAPI.reducerPath]: ticketsAPI.reducer,
+  [ticketTypesAPI.reducerPath]: ticketTypesAPI.reducer,
   [paymentsAPI.reducerPath]: paymentsAPI.reducer,
   [uploadsAPI.reducerPath]: uploadsAPI.reducer,
 });
@@ -45,6 +47,7 @@ export const store = configureStore({
       .concat(venuesAPI.middleware)
       .concat(rsvpAPI.middleware)
       .concat(ticketsAPI.middleware)
+      .concat(ticketTypesAPI.middleware)
       .concat(paymentsAPI.middleware)
       .concat(uploadsAPI.middleware),
 });

@@ -3,12 +3,11 @@ import { authBaseQuery } from "../../utils/authBaseQuery";
 
 export type TRSVPStatus = "Pending" | "Booked" | "Cancelled";
 
-// firstName/lastName/phoneNumber/email casing is unconfirmed against a real
-// payload — pending backend migration, see eventor-frontend-types.md.
 export type TRSVP = {
   RSVPID: number;
   UserID: number | null;
   EventID: number;
+  TicketTypeID: number;
   firstName: string;
   lastName: string;
   phoneNumber: string;
@@ -24,13 +23,46 @@ export type TRSVP = {
   paid: boolean;
 };
 
+// Cart-checkout request shape — matches backend's validateCart /
+// CreateReservationInput (reservation.controller.ts / reservation.service.ts).
+export type TCartAttendee = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phoneNumber: string;
+};
+
+export type TCartLine = {
+  TicketTypeID: number;
+  quantity: number;
+  attendees: TCartAttendee[];
+};
+
+export type TCreateRSVPRequest = {
+  UserID: number | null;
+  cart: TCartLine[];
+};
+
+// Minimal shape of the Payment row the backend inlines into the create
+// response — full TPayment type lives in paymentsAPI.ts.
+type TCreateRSVPPayment = {
+  PaymentID: number;
+  amount: string;
+} | null;
+
 export const rsvpAPI = createApi({
   reducerPath: "rsvpAPI",
   baseQuery: authBaseQuery(),
   tagTypes: ["RSVP"],
   endpoints: (builder) => ({
-    // guest-friendly — works with or without an auth token attached
-    createRSVP: builder.mutation<{ reservations: TRSVP }, Partial<TRSVP>>({
+    // guest-friendly — works with or without an auth token attached.
+    // Backend returns one RSVP row per attendee across the whole cart, plus
+    // the single shared Payment (null for all-$0 carts) — see
+    // reservation.service.ts createReservationService.
+    createRSVP: builder.mutation<
+      { message: string; rsvps: TRSVP[]; payment: TCreateRSVPPayment },
+      TCreateRSVPRequest
+    >({
       query: (body) => ({ url: "/reservation/newRsvp", method: "POST", body }),
       invalidatesTags: ["RSVP"],
     }),

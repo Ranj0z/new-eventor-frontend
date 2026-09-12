@@ -59,16 +59,32 @@ export default function CreateRSVPModal({ event, onClose, reloadEvents }: Create
     try {
       const res = await createRSVP({
         UserID: userId,
-        EventID: event.EventID,
-        firstName: rsvpForm.firstName,
-        lastName: rsvpForm.lastName,
-        phoneNumber: rsvpForm.phoneNumber,
-        email: rsvpForm.email,
-        totalAmount: event.ticketsPrice,
+        cart: [
+          {
+            // TODO: no ticket-type picker yet — backend has no endpoint to
+            // list an event's ticket_type rows either (see eventor.md).
+            // Hardcoded placeholder until both are built; replace with the
+            // TicketTypeID the user actually selects.
+            TicketTypeID: 1,
+            quantity: 1,
+            attendees: [
+              {
+                firstName: rsvpForm.firstName,
+                lastName: rsvpForm.lastName,
+                email: rsvpForm.email,
+                phoneNumber: rsvpForm.phoneNumber,
+              },
+            ],
+          },
+        ],
       }).unwrap();
-      setCreatedRSVP(res.reservations);
+      // Single attendee/single ticket-type cart only, so exactly one RSVP
+      // row comes back — take it directly. Revisit once carts can span
+      // multiple attendees/ticket types.
+      const createdRow = res.rsvps[0];
+      setCreatedRSVP(createdRow);
       reloadEvents();
-      setStep(event.ticketsPrice > 0 ? "payment" : "done");
+      setStep(createdRow.totalAmount > 0 ? "payment" : "done");
     } catch {
       // error surfaced via rsvpError below; stay on current step
     }
