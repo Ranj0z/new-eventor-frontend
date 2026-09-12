@@ -69,8 +69,18 @@ export default function PaymentModal({ rsvp, event, onClose }: PaymentModalProps
 
   const handleSubmit = async () => {
     setInitiateError(null);
+
+    // Defensive — this modal should only ever be reached for RSVPs with a
+    // cart total > 0, which always get a Payment row at creation time (see
+    // reservation.service.ts). A null PaymentID here means this was opened
+    // for a free RSVP by mistake, so there's nothing to initiate.
+    if (rsvp.PaymentID === null) {
+      setInitiateError("This RSVP has no payment to process.");
+      return;
+    }
+
     try {
-      const result = await initiatePayment({ rsvpId: rsvp.RSVPID, phoneNumber }).unwrap();
+      const result = await initiatePayment({ paymentId: rsvp.PaymentID, phoneNumber }).unwrap();
       setPaymentId(result.paymentId);
       setFlow("waiting");
     } catch (err) {

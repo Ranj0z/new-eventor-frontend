@@ -21,6 +21,12 @@ export type TRSVP = {
   // is created for this RSVP (backend-side, not something the frontend
   // needs to trigger itself).
   paid: boolean;
+  // Set at RSVP-creation time when the cart total is > 0 (see
+  // reservation.service.ts createReservationService); null for $0/free
+  // RSVPs, which never get a Payment row. Used to call
+  // paymentsAPI.initiatePayment without a separate RSVPID -> PaymentID
+  // lookup.
+  PaymentID: number | null;
 };
 
 // Cart-checkout request shape — matches backend's validateCart /

@@ -39,11 +39,14 @@ export const paymentsAPI = createApi({
       query: (id) => `/payment/${id}`,
       providesTags: ["Payments"],
     }),
-    // M-Pesa STK push initiation. Amount is derived server-side from the
-    // RSVP/event, never sent from the client.
-    initiatePayment: builder.mutation<TPaymentInitiateResponse, { rsvpId: number; phoneNumber: string }>({
-      query: ({ rsvpId, phoneNumber }) => ({
-        url: `/payments/rsvp/${rsvpId}/initiate`,
+    // M-Pesa STK push initiation. Keyed by PaymentID to match the real
+    // backend route (POST /payments/:paymentId/initiate) — the Payment row
+    // already exists by this point, created at RSVP-creation time (see
+    // reservation.service.ts createReservationService). Amount is derived
+    // server-side from that row, never sent from the client.
+    initiatePayment: builder.mutation<TPaymentInitiateResponse, { paymentId: number; phoneNumber: string }>({
+      query: ({ paymentId, phoneNumber }) => ({
+        url: `/payments/${paymentId}/initiate`,
         method: "POST",
         body: { phoneNumber },
       }),
