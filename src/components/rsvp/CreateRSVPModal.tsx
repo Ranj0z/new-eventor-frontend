@@ -5,6 +5,7 @@ import type { RootState } from "../../app/store";
 import type { TEvents } from "../../reducers/events/eventsAPI";
 import type { TRSVP } from "../../reducers/rsvp/rsvpAPI";
 import { useCreateRSVPMutation } from "../../reducers/rsvp/rsvpAPI";
+import { useGetTicketTypesByEventQuery } from "../../reducers/ticketTypes/ticketTypesAPI";
 import {
   useLoginMutation,
   useRegisterMutation,
@@ -37,6 +38,15 @@ export default function CreateRSVPModal({ event, onClose, reloadEvents }: Create
     email: sessionUser?.email ?? "",
   });
 
+  // The event's own ticket types — which tier gets charged depends entirely
+  // on which one the user picks here. There is no fallback: submission is
+  // blocked until one is selected (see disabled prop on the Continue button).
+  const { data: ticketTypesData, isLoading: ticketTypesLoading } = useGetTicketTypesByEventQuery(
+    event.EventID
+  );
+  const ticketTypes = ticketTypesData?.data ?? [];
+  const [selectedTicketTypeId, setSelectedTicketTypeId] = useState<number | null>(null);
+
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
   const [registerForm, setRegisterForm] = useState({
     address: "",
@@ -56,16 +66,15 @@ export default function CreateRSVPModal({ event, onClose, reloadEvents }: Create
   const [verify, { isLoading: verifyLoading, error: verifyError }] = useVerifyMutation();
 
   const submitRSVP = async (userId: number | null) => {
+    if (selectedTicketTypeId === null) return; // guarded by disabled buttons, but defend anyway
     try {
       const res = await createRSVP({
         UserID: userId,
         cart: [
           {
-            // TODO: no ticket-type picker yet — backend has no endpoint to
-            // list an event's ticket_type rows either (see eventor.md).
-            // Hardcoded placeholder until both are built; replace with the
-            // TicketTypeID the user actually selects.
-            TicketTypeID: 1,
+            TicketTypeID: selectedTicketTypeId,
+            // Group-type tiers still book as a single cart line for now —
+            // "buy N seats under one group ticket" is separate, unbuilt UX.
             quantity: 1,
             attendees: [
               {
@@ -107,6 +116,7 @@ export default function CreateRSVPModal({ event, onClose, reloadEvents }: Create
 
   const handleFormContinue = (e: FormEvent) => {
     e.preventDefault();
+    if (selectedTicketTypeId === null) return;
     if (sessionUser) {
       submitRSVP(sessionUser.UserID);
     } else {
@@ -183,6 +193,54 @@ export default function CreateRSVPModal({ event, onClose, reloadEvents }: Create
 
         {step === "form" && (
           <form onSubmit={handleFormContinue} className="space-y-3">
+            <div>
+              <label className="label text-sm">Ticket type</label>
+              {ticketTypesLoading && (
+                <p className="text-sm text-base-content/60">Loading ticket types…</p>
+              )}
+              {!ticketTypesLoading && ticketTypes.length === 0 && (
+                <p className="text-sm text-error">No ticket types available for this event.</p>
+              )}
+              {!ticketTypesLoading && ticketTypes.length > 0 && (
+                <div className="space-y-2">
+                  {ticketTypes.map((t) => {
+                    const remaining = t.totalQuantity - t.soldQuantity;
+                    const soldOut = remaining <= 0;
+                    return (
+                      <label
+                        key={t.TicketTypeID}
+                        className={`flex items-center justify-between gap-3 p-3 rounded-lg border cursor-pointer ${
+                          selectedTicketTypeId === t.TicketTypeID
+                            ? "border-primary"
+                            : "border-base-300"
+                        } ${soldOut ? "opacity-50 cursor-not-allowed" : ""}`}
+                      >
+                        <span className="flex items-center gap-3">
+                          <input
+                            type="radio"
+                            name="ticketType"
+                            className="radio radio-sm radio-primary"
+                            checked={selectedTicketTypeId === t.TicketTypeID}
+                            disabled={soldOut}
+                            onChange={() => setSelectedTicketTypeId(t.TicketTypeID)}
+                          />
+                          <span className="text-sm">
+                            <span className="font-medium block">{t.name}</span>
+                            <span className="text-base-content/60">
+                              {soldOut ? "Sold out" : `${remaining} left`}
+                            </span>
+                          </span>
+                        </span>
+                        <span className="text-sm font-medium">
+                          {Number(t.price) > 0 ? `KES ${Number(t.price).toLocaleString()}` : "Free"}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label text-sm">First name</label>
@@ -206,7 +264,11 @@ export default function CreateRSVPModal({ event, onClose, reloadEvents }: Create
               <p className="text-error text-sm">Couldn't submit your RSVP. Try again.</p>
             )}
 
-            <button type="submit" className="btn btn-primary w-full" disabled={sessionUser ? rsvpLoading : false}>
+            <button
+              type="submit"
+              className="btn btn-primary w-full"
+              disabled={selectedTicketTypeId === null || (sessionUser ? rsvpLoading : false)}
+            >
               {sessionUser ? (rsvpLoading ? "Booking..." : "RSVP") : "Continue"}
             </button>
           </form>

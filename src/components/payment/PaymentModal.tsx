@@ -109,7 +109,7 @@ export default function PaymentModal({ rsvp, event, onClose }: PaymentModalProps
     <div className="space-y-4">
       <div className="flex justify-between text-sm px-1">
         <span className="text-base-content/60">Amount due</span>
-        <span className="font-medium">KES {event.ticketsPrice.toLocaleString()}</span>
+        <span className="font-medium">KES {Number(rsvp.totalAmount).toLocaleString()}</span>
       </div>
 
       {flow === "form" && (
