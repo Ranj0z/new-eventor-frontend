@@ -1,8 +1,20 @@
-import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import {
+  forwardRef,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
 import { X, Plus, Minus, Trash2 } from "lucide-react";
 import type { TCategory, TEvents, TTicketTypeInput } from "../../reducers/events/eventsAPI";
 import { useCreateEventMutation, useUpdateEventMutation } from "../../reducers/events/eventsAPI";
-import type { TTicketTypePreset } from "../../reducers/ticketTypes/ticketTypesAPI";
+import type { TTicketType, TTicketTypePreset } from "../../reducers/ticketTypes/ticketTypesAPI";
+import {
+  useCreateTicketTypeMutation,
+  useGetTicketTypesByEventQuery,
+  useUpdateTicketTypeMutation,
+} from "../../reducers/ticketTypes/ticketTypesAPI";
 import type { TVenue } from "../../reducers/venues/venuesAPI";
 import { useUploadImageMutation } from "../../reducers/uploads/uploadsAPI";
 import {
@@ -12,7 +24,8 @@ import {
 } from "../../reducers/eventImages/eventImagesAPI";
 import ImageUploadField from "../shared/ImageUploadField";
 
-const CATEGORIES: TCategory[] = ["Tech", "Data Science", "Web Dev"];
+const CATEGORIES: TCategory[] = ["Tech", "Data Science", "Web Dev", "Other"];
+const CUSTOM_CATEGORY_MAX = 30;
 
 const PRESETS: TTicketTypePreset[] = ["Free Entry", "Early Bird", "Regular", "VIP", "Group ticket", "Custom"];
 
@@ -39,6 +52,305 @@ function makeRow(preset: TTicketTypePreset = "Regular"): TTicketTypeInput & { _k
     groupSize: preset === "Group ticket" ? 5 : null,
   };
 }
+
+// Shared row editor for a *new* ticket-type row — used both for the
+// create-event flow (ticketRows) and for adding a new tier to an existing
+// event in edit mode (§7.2). Purely a controlled view over one row; the
+// caller owns the row list and the key-based update/remove/preset handlers.
+function NewTicketTypeRow({
+  row,
+  canRemove,
+  onUpdate,
+  onSetPreset,
+  onRemove,
+}: {
+  row: TTicketTypeInput & { _key: number };
+  canRemove: boolean;
+  onUpdate: (key: number, patch: Partial<TTicketTypeInput>) => void;
+  onSetPreset: (key: number, preset: TTicketTypePreset) => void;
+  onRemove: (key: number) => void;
+}) {
+  return (
+    <div className="rounded-box border border-base-300 p-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <select
+          className="select select-bordered select-sm flex-1"
+          value={row.preset}
+          onChange={(e) => onSetPreset(row._key, e.target.value as TTicketTypePreset)}
+        >
+          {PRESETS.map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </select>
+        {canRemove && (
+          <button
+            type="button"
+            onClick={() => onRemove(row._key)}
+            className="btn btn-xs btn-ghost btn-circle"
+            aria-label="Remove ticket type"
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
+      </div>
+
+      {row.preset === "Custom" && (
+        <input
+          className="input input-bordered input-sm w-full"
+          placeholder="Ticket name"
+          value={row.name}
+          onChange={(e) => onUpdate(row._key, { name: e.target.value })}
+          required
+        />
+      )}
+
+      <div className="grid grid-cols-2 gap-2">
+        <label className="text-xs">
+          Price per ticket (KES)
+          <input
+            type="number"
+            min={0}
+            className="input input-bordered input-sm w-full mt-1"
+            value={row.price}
+            disabled={row.preset === "Free Entry"}
+            onChange={(e) => onUpdate(row._key, { price: Number(e.target.value) })}
+          />
+        </label>
+        <label className="text-xs">
+          Number of tickets
+          <input
+            type="number"
+            min={1}
+            className="input input-bordered input-sm w-full mt-1"
+            value={row.totalQuantity}
+            onChange={(e) => onUpdate(row._key, { totalQuantity: Number(e.target.value) })}
+            required
+          />
+        </label>
+      </div>
+
+      {row.preset === "Group ticket" && (
+        <label className="text-xs block">
+          People per group
+          <div className="flex items-center gap-2 mt-1">
+            <button
+              type="button"
+              className="btn btn-xs btn-outline btn-circle"
+              aria-label="Decrease group size"
+              onClick={() => onUpdate(row._key, { groupSize: Math.max(2, (row.groupSize ?? 5) - 1) })}
+            >
+              <Minus size={12} />
+            </button>
+            <span className="w-6 text-center">{row.groupSize ?? 5}</span>
+            <button
+              type="button"
+              className="btn btn-xs btn-outline btn-circle"
+              aria-label="Increase group size"
+              onClick={() => onUpdate(row._key, { groupSize: (row.groupSize ?? 5) + 1 })}
+            >
+              <Plus size={12} />
+            </button>
+          </div>
+        </label>
+      )}
+    </div>
+  );
+}
+
+export type ExistingTicketTypesHandle = {
+  // Fires every queued update/create in one batch. Throws (and leaves nothing
+  // queued-but-uncommitted lost) if any mutation fails, so the caller can
+  // surface an error and keep the modal open instead of closing on a partial
+  // save.
+  commitPendingChanges: () => Promise<void>;
+};
+
+// Existing tiers for an event already being edited (§7.2). Split out like
+// ExtraImagesSection so its query only ever mounts with a real EventID.
+// Edits are staged locally and only sent to the backend when the parent
+// form is submitted — see commitPendingChanges.
+const ExistingTicketTypesSection = forwardRef<ExistingTicketTypesHandle, { eventId: number }>(
+  function ExistingTicketTypesSection({ eventId }, ref) {
+    const { data, isLoading } = useGetTicketTypesByEventQuery(eventId);
+    const tiers = data?.data ?? [];
+    const [createTicketType] = useCreateTicketTypeMutation();
+    const [updateTicketType] = useUpdateTicketTypeMutation();
+
+    const [edits, setEdits] = useState<Record<number, Partial<TTicketType>>>({});
+    const [newRows, setNewRows] = useState<(TTicketTypeInput & { _key: number })[]>([]);
+
+    const patchTier = (id: number, patch: Partial<TTicketType>) => {
+      setEdits((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
+    };
+
+    const addNewRow = () => setNewRows((rows) => [...rows, makeRow("Regular")]);
+    const removeNewRow = (key: number) => setNewRows((rows) => rows.filter((r) => r._key !== key));
+    const updateNewRow = (key: number, patch: Partial<TTicketTypeInput>) => {
+      setNewRows((rows) => rows.map((r) => (r._key === key ? { ...r, ...patch } : r)));
+    };
+    const setNewRowPreset = (key: number, preset: TTicketTypePreset) => {
+      setNewRows((rows) =>
+        rows.map((r) =>
+          r._key === key
+            ? {
+                ...r,
+                preset,
+                name: PRESET_FIXED_NAME[preset] ?? (preset === "Custom" ? "" : preset),
+                price: preset === "Free Entry" ? 0 : r.price,
+                groupSize: preset === "Group ticket" ? r.groupSize ?? 5 : null,
+              }
+            : r
+        )
+      );
+    };
+
+    useImperativeHandle(ref, () => ({
+      commitPendingChanges: async () => {
+        const updates = Object.entries(edits).map(([ticketTypeId, patch]) =>
+          updateTicketType({ ticketTypeId: Number(ticketTypeId), ...patch }).unwrap()
+        );
+        const creates = newRows.map((row) =>
+          createTicketType({
+            eventId,
+            name: row.name,
+            type: row.preset === "Group ticket" ? "group" : "individual",
+            price: row.price,
+            totalQuantity: row.totalQuantity,
+            groupSize: row.preset === "Group ticket" ? row.groupSize ?? 5 : undefined,
+          }).unwrap()
+        );
+        // Let all queued mutations settle before deciding success/failure so
+        // one failure doesn't abandon the others mid-flight.
+        await Promise.all([...updates, ...creates]);
+        setEdits({});
+        setNewRows([]);
+      },
+    }));
+
+    return (
+      <div className="border-t pt-3 space-y-3">
+        <span className="text-sm font-medium">Ticket types</span>
+
+        {isLoading && <p className="text-xs opacity-60">Loading ticket types...</p>}
+
+        {tiers.map((tier) => {
+          const locked = tier.soldQuantity > 0;
+          const effective = { ...tier, ...edits[tier.TicketTypeID] };
+
+          return (
+            <div key={tier.TicketTypeID} className="rounded-box border border-base-300 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <input
+                  className="input input-bordered input-sm flex-1"
+                  value={effective.name}
+                  disabled={locked}
+                  onChange={(e) => patchTier(tier.TicketTypeID, { name: e.target.value })}
+                />
+                <button
+                  type="button"
+                  className="btn btn-xs btn-outline"
+                  onClick={() =>
+                    patchTier(tier.TicketTypeID, {
+                      status: effective.status === "active" ? "suspended" : "active",
+                    })
+                  }
+                >
+                  {effective.status === "active" ? "Suspend" : "Reactivate"}
+                </button>
+              </div>
+
+              {locked && (
+                <p className="text-xs opacity-70">
+                  Locked — tickets already sold. You can still suspend this tier.
+                </p>
+              )}
+
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-xs">
+                  Price per ticket (KES)
+                  <input
+                    type="number"
+                    min={0}
+                    className="input input-bordered input-sm w-full mt-1"
+                    value={effective.price}
+                    disabled={locked}
+                    onChange={(e) => patchTier(tier.TicketTypeID, { price: Number(e.target.value) })}
+                  />
+                </label>
+                <label className="text-xs">
+                  Number of tickets
+                  <input
+                    type="number"
+                    min={1}
+                    className="input input-bordered input-sm w-full mt-1"
+                    value={effective.totalQuantity}
+                    disabled={locked}
+                    onChange={(e) =>
+                      patchTier(tier.TicketTypeID, { totalQuantity: Number(e.target.value) })
+                    }
+                  />
+                </label>
+              </div>
+
+              {tier.type === "group" && (
+                <label className="text-xs block">
+                  People per group
+                  <div className="flex items-center gap-2 mt-1">
+                    <button
+                      type="button"
+                      className="btn btn-xs btn-outline btn-circle"
+                      aria-label="Decrease group size"
+                      disabled={locked}
+                      onClick={() =>
+                        patchTier(tier.TicketTypeID, {
+                          groupSize: Math.max(2, (effective.groupSize ?? 5) - 1),
+                        })
+                      }
+                    >
+                      <Minus size={12} />
+                    </button>
+                    <span className="w-6 text-center">{effective.groupSize ?? 5}</span>
+                    <button
+                      type="button"
+                      className="btn btn-xs btn-outline btn-circle"
+                      aria-label="Increase group size"
+                      disabled={locked}
+                      onClick={() =>
+                        patchTier(tier.TicketTypeID, { groupSize: (effective.groupSize ?? 5) + 1 })
+                      }
+                    >
+                      <Plus size={12} />
+                    </button>
+                  </div>
+                </label>
+              )}
+            </div>
+          );
+        })}
+
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium opacity-70">Add a new tier</span>
+          <button type="button" onClick={addNewRow} className="btn btn-xs btn-outline gap-1">
+            <Plus size={14} /> Add ticket type
+          </button>
+        </div>
+
+        {newRows.map((row) => (
+          <NewTicketTypeRow
+            key={row._key}
+            row={row}
+            canRemove
+            onUpdate={updateNewRow}
+            onSetPreset={setNewRowPreset}
+            onRemove={removeNewRow}
+          />
+        ))}
+      </div>
+    );
+  }
+);
 
 // Extra ("carousel") photos for an already-existing event. Split into its own
 // component so the images query can take a plain number and never has to be
@@ -175,6 +487,7 @@ export default function CreateEventModal({ event, venues, onClose }: CreateEvent
   const [uploadImage, { isLoading: uploading }] = useUploadImageMutation();
   const [error, setError] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const ticketTypesRef = useRef<ExistingTicketTypesHandle>(null);
 
   // The modal owns its own create/edit mode: after a successful create it
   // switches to editing the event it just made instead of closing, so the host
@@ -188,12 +501,25 @@ export default function CreateEventModal({ event, venues, onClose }: CreateEvent
     description: event?.description ?? "",
     VenueID: event?.VenueID ?? venues[0]?.VenueID ?? 0,
     category: event?.category ?? "Tech",
+    customCategory: event?.customCategory ?? null,
     date: event?.date ?? "",
     time: event?.time ?? "",
   });
 
-  // Ticket tiers only apply at creation time — an existing event's tiers
-  // can't be edited/deleted later, so this list is create-only.
+  const setCategory = (category: TCategory) => {
+    setForm((f) => ({
+      ...f,
+      category,
+      // Client-side defense in depth: the backend also enforces this, but we
+      // don't rely on that alone (matches eventsAPI's TCreateEventPayload note).
+      customCategory: category === "Other" ? f.customCategory : null,
+    }));
+  };
+
+  // Ticket tiers are handled by two different flows depending on mode:
+  // - create mode: bundled into createEvent's payload (unchanged, ticketRows).
+  // - edit mode: existing tiers are editable via ExistingTicketTypesSection
+  //   (§7.2) — new tiers there call createTicketType directly instead.
   const [ticketRows, setTicketRows] = useState<(TTicketTypeInput & { _key: number })[]>(
     event ? [] : [makeRow("Regular")]
   );
@@ -245,8 +571,13 @@ export default function CreateEventModal({ event, venues, onClose }: CreateEvent
 
     try {
       if (activeEvent) {
-        // Ticket tiers are create-only — editing an event never touches ticketTypes.
+        // Ticket tiers ARE editable in edit mode (§7.2) — handled by
+        // ExistingTicketTypesSection, committed alongside the event fields
+        // below so both succeed or the modal stays open with an error.
         await updateEvent({ id: activeEvent.EventID, ...form, ...imagePatch }).unwrap();
+        if (ticketTypesRef.current) {
+          await ticketTypesRef.current.commitPendingChanges();
+        }
         onClose();
       } else {
         const ticketTypes: TTicketTypeInput[] = ticketRows.map(({ _key, ...row }) => ({
@@ -323,7 +654,7 @@ export default function CreateEventModal({ event, venues, onClose }: CreateEvent
               <select
                 className="select select-bordered w-full mt-1"
                 value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value as TCategory })}
+                onChange={(e) => setCategory(e.target.value as TCategory)}
               >
                 {CATEGORIES.map((c) => (
                   <option key={c} value={c}>
@@ -333,6 +664,19 @@ export default function CreateEventModal({ event, venues, onClose }: CreateEvent
               </select>
             </label>
           </div>
+
+          {form.category === "Other" && (
+            <label className="text-sm block">
+              Custom category
+              <input
+                className="input input-bordered w-full mt-1"
+                value={form.customCategory ?? ""}
+                maxLength={CUSTOM_CATEGORY_MAX}
+                onChange={(e) => setForm({ ...form, customCategory: e.target.value })}
+                required
+              />
+            </label>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <label className="text-sm">
@@ -357,10 +701,8 @@ export default function CreateEventModal({ event, venues, onClose }: CreateEvent
             </label>
           </div>
 
-          {isEditing ? (
-            <p className="text-sm opacity-70 border-t pt-3">
-              Ticket tiers can't be changed after an event is created.
-            </p>
+          {activeEvent ? (
+            <ExistingTicketTypesSection ref={ticketTypesRef} eventId={activeEvent.EventID} />
           ) : (
             <div className="border-t pt-3 space-y-3">
               <div className="flex items-center justify-between">
@@ -371,93 +713,14 @@ export default function CreateEventModal({ event, venues, onClose }: CreateEvent
               </div>
 
               {ticketRows.map((row) => (
-                <div key={row._key} className="rounded-box border border-base-300 p-3 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <select
-                      className="select select-bordered select-sm flex-1"
-                      value={row.preset}
-                      onChange={(e) => setRowPreset(row._key, e.target.value as TTicketTypePreset)}
-                    >
-                      {PRESETS.map((p) => (
-                        <option key={p} value={p}>
-                          {p}
-                        </option>
-                      ))}
-                    </select>
-                    {ticketRows.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeRow(row._key)}
-                        className="btn btn-xs btn-ghost btn-circle"
-                        aria-label="Remove ticket type"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </div>
-
-                  {row.preset === "Custom" && (
-                    <input
-                      className="input input-bordered input-sm w-full"
-                      placeholder="Ticket name"
-                      value={row.name}
-                      onChange={(e) => updateRow(row._key, { name: e.target.value })}
-                      required
-                    />
-                  )}
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <label className="text-xs">
-                      Price per ticket (KES)
-                      <input
-                        type="number"
-                        min={0}
-                        className="input input-bordered input-sm w-full mt-1"
-                        value={row.price}
-                        disabled={row.preset === "Free Entry"}
-                        onChange={(e) => updateRow(row._key, { price: Number(e.target.value) })}
-                      />
-                    </label>
-                    <label className="text-xs">
-                      Number of tickets
-                      <input
-                        type="number"
-                        min={1}
-                        className="input input-bordered input-sm w-full mt-1"
-                        value={row.totalQuantity}
-                        onChange={(e) => updateRow(row._key, { totalQuantity: Number(e.target.value) })}
-                        required
-                      />
-                    </label>
-                  </div>
-
-                  {row.preset === "Group ticket" && (
-                    <label className="text-xs block">
-                      People per group
-                      <div className="flex items-center gap-2 mt-1">
-                        <button
-                          type="button"
-                          className="btn btn-xs btn-outline btn-circle"
-                          aria-label="Decrease group size"
-                          onClick={() =>
-                            updateRow(row._key, { groupSize: Math.max(2, (row.groupSize ?? 5) - 1) })
-                          }
-                        >
-                          <Minus size={12} />
-                        </button>
-                        <span className="w-6 text-center">{row.groupSize ?? 5}</span>
-                        <button
-                          type="button"
-                          className="btn btn-xs btn-outline btn-circle"
-                          aria-label="Increase group size"
-                          onClick={() => updateRow(row._key, { groupSize: (row.groupSize ?? 5) + 1 })}
-                        >
-                          <Plus size={12} />
-                        </button>
-                      </div>
-                    </label>
-                  )}
-                </div>
+                <NewTicketTypeRow
+                  key={row._key}
+                  row={row}
+                  canRemove={ticketRows.length > 1}
+                  onUpdate={updateRow}
+                  onSetPreset={setRowPreset}
+                  onRemove={removeRow}
+                />
               ))}
             </div>
           )}
