@@ -1,6 +1,11 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import { ApiDomain } from "../../utils/ApiDomain";
-import type { RootState } from "../../app/store";
+import type { UserState } from "../login/userSlice";
+
+// Same reason as authBaseQuery: reading the token through a minimal local
+// state type instead of RootState keeps store.ts out of this module's import
+// cycle.
+type AuthState = { user: UserState };
 
 export type TUploadFolder = "profile" | "venue" | "event";
 
@@ -23,7 +28,7 @@ type TUploadImageArgs = {
 const uploadsBaseQuery = fetchBaseQuery({
   baseUrl: ApiDomain,
   prepareHeaders: (headers, { getState }) => {
-    const token = (getState() as RootState).user.token;
+    const token = (getState() as AuthState).user.token;
     if (token) headers.set("Authorization", `Bearer ${token}`);
     return headers;
   },

@@ -1,10 +1,15 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { X, Plus, Minus, Trash2 } from "lucide-react";
 import type { TCategory, TEvents, TTicketTypeInput } from "../../reducers/events/eventsAPI";
 import { useCreateEventMutation, useUpdateEventMutation } from "../../reducers/events/eventsAPI";
 import type { TTicketTypePreset } from "../../reducers/ticketTypes/ticketTypesAPI";
 import type { TVenue } from "../../reducers/venues/venuesAPI";
 import { useUploadImageMutation } from "../../reducers/uploads/uploadsAPI";
+import {
+  useAddEventImageMutation,
+  useDeleteEventImageMutation,
+  useGetEventImagesQuery,
+} from "../../reducers/eventImages/eventImagesAPI";
 import ImageUploadField from "../shared/ImageUploadField";
 
 const CATEGORIES: TCategory[] = ["Tech", "Data Science", "Web Dev"];
@@ -16,6 +21,13 @@ const PRESET_FIXED_NAME: Partial<Record<TTicketTypePreset, string>> = {
   "Group ticket": "Group ticket",
 };
 
+// Mirrors the backend caps: /uploads/image rejects anything outside these
+// types or over 5MB, and the event_images module caps a single event at 6
+// extra photos.
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const MAX_BYTES = 5 * 1024 * 1024;
+const MAX_EXTRA_IMAGES = 6;
+
 let rowKeySeq = 0;
 function makeRow(preset: TTicketTypePreset = "Regular"): TTicketTypeInput & { _key: number } {
   return {
@@ -26,6 +38,129 @@ function makeRow(preset: TTicketTypePreset = "Regular"): TTicketTypeInput & { _k
     totalQuantity: 1,
     groupSize: preset === "Group ticket" ? 5 : null,
   };
+}
+
+// Extra ("carousel") photos for an already-existing event. Split into its own
+// component so the images query can take a plain number and never has to be
+// skipped — it only ever mounts once there's a real EventID to attach to.
+function ExtraImagesSection({ eventId }: { eventId: number }) {
+  const { data: images = [], isLoading } = useGetEventImagesQuery(eventId);
+  const [uploadImage, { isLoading: uploadingExtra }] = useUploadImageMutation();
+  const [addEventImage, { isLoading: persisting }] = useAddEventImageMutation();
+  const [deleteEventImage] = useDeleteEventImageMutation();
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const atCap = images.length >= MAX_EXTRA_IMAGES;
+  const busy = uploadingExtra || persisting;
+
+  const resetInput = () => {
+    if (inputRef.current) inputRef.current.value = "";
+  };
+
+  const handleFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageError(null);
+
+    // 1. Client-side validation, before anything hits the network.
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setImageError("Only JPEG, PNG, or WEBP images are allowed.");
+      resetInput();
+      return;
+    }
+    if (file.size > MAX_BYTES) {
+      setImageError("Image must be 5MB or smaller.");
+      resetInput();
+      return;
+    }
+
+    // 2. Upload to Cloudinary.
+    let uploaded: { url: string; public_id: string };
+    try {
+      uploaded = await uploadImage({ file, folder: "event" }).unwrap();
+    } catch {
+      setImageError("Couldn't upload that photo. Try again.");
+      resetInput();
+      return;
+    }
+
+    // 3. Persist the row. A failure here leaves an orphaned Cloudinary asset,
+    // so it must be surfaced rather than swallowed.
+    try {
+      await addEventImage({ eventId, url: uploaded.url, public_id: uploaded.public_id }).unwrap();
+    } catch {
+      setImageError("Photo uploaded but couldn't be attached to the event. Try adding it again.");
+    }
+    resetInput();
+  };
+
+  const handleDelete = async (imageId: number) => {
+    setImageError(null);
+    setDeletingId(imageId);
+    try {
+      await deleteEventImage({ imageId, eventId }).unwrap();
+    } catch {
+      setImageError("Couldn't remove that photo. Try again.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  return (
+    <div className="border-t pt-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium">More photos</span>
+        <span className="text-xs opacity-60">
+          {images.length}/{MAX_EXTRA_IMAGES}
+        </span>
+      </div>
+
+      {isLoading && <p className="text-xs opacity-60">Loading photos...</p>}
+
+      {images.length > 0 && (
+        <div className="grid grid-cols-4 gap-2">
+          {images.map((image) => (
+            <div key={image.id} className="relative">
+              <img
+                src={image.url}
+                alt=""
+                className="w-full h-16 object-cover rounded border border-base-300"
+              />
+              <button
+                type="button"
+                onClick={() => handleDelete(image.id)}
+                disabled={deletingId === image.id}
+                className="btn btn-xs btn-circle absolute -right-1.5 -top-1.5"
+                aria-label="Remove photo"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {atCap ? (
+        <p className="text-xs opacity-70">Maximum {MAX_EXTRA_IMAGES} additional photos.</p>
+      ) : (
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="file-input file-input-bordered file-input-sm w-full"
+          disabled={busy}
+          onChange={handleFile}
+        />
+      )}
+
+      {busy && (
+        <p className="text-xs opacity-70">{uploadingExtra ? "Uploading photo..." : "Saving photo..."}</p>
+      )}
+      {imageError && <p className="text-error text-xs">{imageError}</p>}
+    </div>
+  );
 }
 
 type CreateEventModalProps = {
@@ -40,6 +175,13 @@ export default function CreateEventModal({ event, venues, onClose }: CreateEvent
   const [uploadImage, { isLoading: uploading }] = useUploadImageMutation();
   const [error, setError] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+
+  // The modal owns its own create/edit mode: after a successful create it
+  // switches to editing the event it just made instead of closing, so the host
+  // can add extra photos in the same session.
+  const [activeEvent, setActiveEvent] = useState<TEvents | null>(event);
+  const [justCreated, setJustCreated] = useState(false);
+  const isEditing = activeEvent !== null;
 
   const [form, setForm] = useState({
     title: event?.title ?? "",
@@ -85,7 +227,7 @@ export default function CreateEventModal({ event, venues, onClose }: CreateEvent
     e.preventDefault();
     setError(false);
 
-    if (!event && ticketRows.length === 0) {
+    if (!isEditing && ticketRows.length === 0) {
       setError(true);
       return;
     }
@@ -102,17 +244,22 @@ export default function CreateEventModal({ event, venues, onClose }: CreateEvent
     }
 
     try {
-      if (event) {
+      if (activeEvent) {
         // Ticket tiers are create-only — editing an event never touches ticketTypes.
-        await updateEvent({ id: event.EventID, ...form, ...imagePatch }).unwrap();
+        await updateEvent({ id: activeEvent.EventID, ...form, ...imagePatch }).unwrap();
+        onClose();
       } else {
         const ticketTypes: TTicketTypeInput[] = ticketRows.map(({ _key, ...row }) => ({
           ...row,
           groupSize: row.preset === "Group ticket" ? row.groupSize ?? 5 : null,
         }));
-        await createEvent({ ...form, ...imagePatch, ticketTypes }).unwrap();
+        const created = await createEvent({ ...form, ...imagePatch, ticketTypes }).unwrap();
+        // Stay open and flip into edit mode for the event just created.
+        setActiveEvent(created.data);
+        setJustCreated(true);
+        setPendingFile(null);
+        setTicketRows([]);
       }
-      onClose();
     } catch {
       setError(true);
     }
@@ -125,7 +272,13 @@ export default function CreateEventModal({ event, venues, onClose }: CreateEvent
           <X size={18} />
         </button>
 
-        <h3 className="font-display text-xl mb-4">{event ? "Edit event" : "Create event"}</h3>
+        <h3 className="font-display text-xl mb-4">{isEditing ? "Edit event" : "Create event"}</h3>
+
+        {justCreated && (
+          <div className="alert alert-success text-sm mb-4">
+            Event created — add a few more photos below, or close when you're done.
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <label className="text-sm block">
@@ -204,7 +357,7 @@ export default function CreateEventModal({ event, venues, onClose }: CreateEvent
             </label>
           </div>
 
-          {event ? (
+          {isEditing ? (
             <p className="text-sm opacity-70 border-t pt-3">
               Ticket tiers can't be changed after an event is created.
             </p>
@@ -311,15 +464,19 @@ export default function CreateEventModal({ event, venues, onClose }: CreateEvent
 
           <ImageUploadField
             label="Event photo"
-            value={event?.image_url ?? null}
+            value={activeEvent?.image_url ?? null}
             onFileSelect={setPendingFile}
             folder="event"
           />
 
+          {/* Extra photos need a real EventID to attach to, so this only ever
+              renders in edit mode — including straight after a create. */}
+          {activeEvent && <ExtraImagesSection eventId={activeEvent.EventID} />}
+
           {error && <p className="text-error text-sm">Couldn't save the event. Try again.</p>}
 
           <button className="btn btn-primary w-full" disabled={isLoading}>
-            {uploading ? "Uploading..." : isLoading ? "Saving..." : event ? "Save changes" : "Create event"}
+            {uploading ? "Uploading..." : isLoading ? "Saving..." : isEditing ? "Save changes" : "Create event"}
           </button>
         </form>
       </div>

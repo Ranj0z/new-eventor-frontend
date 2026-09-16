@@ -12,6 +12,7 @@ import { ticketsAPI } from "../reducers/tickets/ticketsAPI";
 import { ticketTypesAPI } from "../reducers/ticketTypes/ticketTypesAPI";
 import { paymentsAPI } from "../reducers/payments/paymentsAPI";
 import { uploadsAPI } from "../reducers/uploads/uploadsAPI";
+import { eventImagesAPI } from "../reducers/eventImages/eventImagesAPI";
 
 // Only the auth session persists to localStorage — every RTK Query cache
 // refetches fresh on load. See eventor-state-architecture.md §5.
@@ -33,6 +34,7 @@ const rootReducer = combineReducers({
   [ticketTypesAPI.reducerPath]: ticketTypesAPI.reducer,
   [paymentsAPI.reducerPath]: paymentsAPI.reducer,
   [uploadsAPI.reducerPath]: uploadsAPI.reducer,
+  [eventImagesAPI.reducerPath]: eventImagesAPI.reducer,
 });
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);
@@ -49,9 +51,14 @@ export const store = configureStore({
       .concat(ticketsAPI.middleware)
       .concat(ticketTypesAPI.middleware)
       .concat(paymentsAPI.middleware)
-      .concat(uploadsAPI.middleware),
+      .concat(uploadsAPI.middleware)
+      .concat(eventImagesAPI.middleware),
 });
 
 export const persistedStore = persistStore(store);
-export type RootState = ReturnType<typeof store.getState>;
+// Derived from rootReducer, not store.getState(): the persisted store's type
+// is `RootState & PersistPartial`, and inferring it here while the slices
+// below still reference RootState produces a cycle TS resolves as bare
+// PersistPartial. rootReducer's type has everything call sites actually read.
+export type RootState = ReturnType<typeof rootReducer>;
 export type AppDispatch = typeof store.dispatch;

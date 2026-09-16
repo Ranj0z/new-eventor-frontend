@@ -2,6 +2,8 @@ import { useState } from "react";
 import { X, CalendarDays, MapPin, Ticket, Tag } from "lucide-react";
 import type { TEvents } from "../../reducers/events/eventsAPI";
 import CreateRSVPModal from "../rsvp/CreateRSVPModal";
+import EventImageCarousel from "../shared/EventImageCarousel";
+import { useGetEventImagesQuery } from "../../reducers/eventImages/eventImagesAPI";
 
 type EventModalProps = {
   event: TEvents | null;
@@ -12,6 +14,10 @@ type EventModalProps = {
 
 export default function EventModal({ event, venueName, onClose, reloadEvents }: EventModalProps) {
   const [rsvpOpen, setRsvpOpen] = useState(false);
+
+  // Extra photos are additive: skipped entirely while no event is selected,
+  // and the section below simply doesn't render when the list comes back empty.
+  const { data: extraImages } = useGetEventImagesQuery(event?.EventID ?? 0, { skip: !event });
 
   if (!event) return null;
 
@@ -27,6 +33,22 @@ export default function EventModal({ event, venueName, onClose, reloadEvents }: 
         >
           <X size={18} />
         </button>
+
+        {/* Hero image — always its own static element, never part of the carousel. */}
+        {event.image_url && (
+          <img
+            src={event.image_url}
+            alt=""
+            className="w-full h-48 object-cover rounded-box border border-base-300 mb-4"
+          />
+        )}
+
+        {/* Carousel of extra photos, rendered only when event_images rows exist. */}
+        {extraImages && extraImages.length > 0 && (
+          <div className="mb-4">
+            <EventImageCarousel images={extraImages} />
+          </div>
+        )}
 
         <h3 className="font-display text-2xl mb-1">{event.title}</h3>
         <span className="badge badge-secondary badge-sm mb-4">
