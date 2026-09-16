@@ -4,10 +4,18 @@ import { Smartphone, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import type { TEvents } from "../../reducers/events/eventsAPI";
 import type { TRSVP } from "../../reducers/rsvp/rsvpAPI";
 import { rsvpAPI } from "../../reducers/rsvp/rsvpAPI";
+import type { TTicketType } from "../../reducers/ticketTypes/ticketTypesAPI";
 import { useInitiatePaymentMutation, useGetPaymentStatusQuery } from "../../reducers/payments/paymentsAPI";
+import { isValidKenyanPhone } from "../../utils/phoneValidation";
+
+type TCreateRSVPPayment = { PaymentID: number; amount: string } | null;
 
 type PaymentModalProps = {
-  rsvp: TRSVP;
+  rsvps: TRSVP[];
+  payment: TCreateRSVPPayment;
+  // Passed down from CreateRSVPModal, which already fetched this — avoids a
+  // duplicate query just to look up tier names for the order summary.
+  ticketTypes: TTicketType[];
   event: TEvents;
   onClose: () => void;
 };
@@ -17,14 +25,19 @@ type FlowState = "form" | "waiting" | "success" | "failed" | "timeout";
 const POLL_INTERVAL_MS = 4000;
 const TIMEOUT_MS = 90_000;
 
-export default function PaymentModal({ rsvp, event, onClose }: PaymentModalProps) {
+export default function PaymentModal({ rsvps, payment, ticketTypes, event, onClose }: PaymentModalProps) {
   const dispatch = useDispatch();
 
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [phoneTouched, setPhoneTouched] = useState(false);
   const [flow, setFlow] = useState<FlowState>("form");
   const [paymentId, setPaymentId] = useState<number | null>(null);
   const [failureMessage, setFailureMessage] = useState<string | null>(null);
   const [initiateError, setInitiateError] = useState<string | null>(null);
+  // Belt-and-suspenders on top of RTK Query's own isLoading: flips true
+  // synchronously on click, before the mutation's loading state has a chance
+  // to update, so a fast double-click can't fire two initiate calls.
+  const [submitting, setSubmitting] = useState(false);
 
   const [initiatePayment, { isLoading: isInitiating }] = useInitiatePaymentMutation();
 
@@ -67,20 +80,35 @@ export default function PaymentModal({ rsvp, event, onClose }: PaymentModalProps
     }
   }, [statusData, flow, dispatch]);
 
+  // Groups the flat rsvps array by TicketTypeID for the order summary —
+  // one row per tier, "Tier name × count — subtotal."
+  const tierCounts = new Map<number, number>();
+  rsvps.forEach((r) => tierCounts.set(r.TicketTypeID, (tierCounts.get(r.TicketTypeID) ?? 0) + 1));
+  const ticketTypesById = new Map(ticketTypes.map((t) => [t.TicketTypeID, t]));
+
+  const phoneValid = isValidKenyanPhone(phoneNumber);
+
+  const handlePhoneChange = (value: string) => {
+    setPhoneNumber(value);
+    if (!phoneTouched) setPhoneTouched(true);
+  };
+
   const handleSubmit = async () => {
     setInitiateError(null);
+    setSubmitting(true);
 
-    // Defensive — this modal should only ever be reached for RSVPs with a
-    // cart total > 0, which always get a Payment row at creation time (see
-    // reservation.service.ts). A null PaymentID here means this was opened
-    // for a free RSVP by mistake, so there's nothing to initiate.
-    if (rsvp.PaymentID === null) {
+    // Defensive — this modal should only ever be reached for a cart total
+    // > 0, which always produces a Payment row at creation time (see
+    // reservation.service.ts). A null payment here means this was opened for
+    // a free order by mistake, so there's nothing to initiate.
+    if (!payment) {
       setInitiateError("This RSVP has no payment to process.");
+      setSubmitting(false);
       return;
     }
 
     try {
-      const result = await initiatePayment({ paymentId: rsvp.PaymentID, phoneNumber }).unwrap();
+      const result = await initiatePayment({ paymentId: payment.PaymentID, phoneNumber }).unwrap();
       setPaymentId(result.paymentId);
       setFlow("waiting");
     } catch (err) {
@@ -90,6 +118,8 @@ export default function PaymentModal({ rsvp, event, onClose }: PaymentModalProps
       } else {
         setInitiateError("Couldn't start the payment. Please try again.");
       }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -107,9 +137,26 @@ export default function PaymentModal({ rsvp, event, onClose }: PaymentModalProps
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between text-sm px-1">
-        <span className="text-base-content/60">Amount due</span>
-        <span className="font-medium">KES {Number(rsvp.totalAmount).toLocaleString()}</span>
+      {/* Order summary — replaces the old bare "Amount due" line. */}
+      <div className="rounded-box border border-base-300 p-3 space-y-1 text-sm">
+        {Array.from(tierCounts.entries()).map(([ticketTypeId, count]) => {
+          const t = ticketTypesById.get(ticketTypeId);
+          const subtotal = t ? Number(t.price) * count : null;
+          return (
+            <div key={ticketTypeId} className="flex justify-between">
+              <span>
+                {t?.name ?? "Ticket"} × {count}
+              </span>
+              {subtotal !== null && <span>KES {subtotal.toLocaleString()}</span>}
+            </div>
+          );
+        })}
+        {payment && (
+          <div className="flex justify-between font-medium border-t border-base-300 pt-1 mt-1">
+            <span>Total</span>
+            <span>KES {Number(payment.amount).toLocaleString()}</span>
+          </div>
+        )}
       </div>
 
       {flow === "form" && (
@@ -119,7 +166,8 @@ export default function PaymentModal({ rsvp, event, onClose }: PaymentModalProps
             <div className="text-sm">
               <p className="font-medium">Pay with M-Pesa</p>
               <p className="text-base-content/60">
-                RSVP #{rsvp.RSVPID} ({event.title}). Enter the phone number to receive the STK push.
+                {event.title} — {rsvps.length} ticket{rsvps.length === 1 ? "" : "s"}. Enter the phone number
+                to receive the STK push.
               </p>
             </div>
           </div>
@@ -131,9 +179,15 @@ export default function PaymentModal({ rsvp, event, onClose }: PaymentModalProps
               className="input input-bordered w-full mt-1"
               placeholder="07XXXXXXXX"
               value={phoneNumber}
-              onChange={(e) => setPhoneNumber(e.target.value)}
+              onChange={(e) => handlePhoneChange(e.target.value)}
+              onBlur={() => setPhoneTouched(true)}
               required
             />
+            {phoneTouched && phoneNumber.length > 0 && !phoneValid && (
+              <span className="text-error text-xs block mt-1">
+                Enter a valid phone number (07XXXXXXXX, 01XXXXXXXX, or 254XXXXXXXXX).
+              </span>
+            )}
           </label>
 
           {initiateError && <p className="text-error text-sm">{initiateError}</p>}
@@ -142,9 +196,9 @@ export default function PaymentModal({ rsvp, event, onClose }: PaymentModalProps
             type="button"
             className="btn btn-primary w-full"
             onClick={handleSubmit}
-            disabled={isInitiating || !phoneNumber}
+            disabled={isInitiating || submitting || !phoneValid || !payment}
           >
-            {isInitiating ? "Sending request..." : "Pay now"}
+            {isInitiating || submitting ? "Sending request..." : "Pay now"}
           </button>
         </>
       )}
@@ -166,7 +220,7 @@ export default function PaymentModal({ rsvp, event, onClose }: PaymentModalProps
           <CheckCircle2 size={20} className="text-success shrink-0 mt-0.5" />
           <div className="text-sm">
             <p className="font-medium">Payment confirmed</p>
-            <p className="text-base-content/60">RSVP #{rsvp.RSVPID} is now marked as paid.</p>
+            <p className="text-base-content/60">Payment confirmed — your tickets for {event.title} are booked.</p>
           </div>
         </div>
       )}

@@ -25,6 +25,7 @@ import Verify from "./pages/Register/Verify";
 import ForgotPassword from "./pages/ForgotPassword/ForgotPassword";
 import ResetPassword from "./pages/ForgotPassword/ResetPassword";
 import Error from "./pages/Error/Error";
+import EventDetails from "./pages/EventDetails/EventDetails";
 
 import AdminUsers from "./pages/Admin/Dashboard/Users/Users";
 import AdminEvents from "./pages/Admin/Dashboard/Events/Events";
@@ -150,6 +151,11 @@ const router = createBrowserRouter([
           { path: "profile", element: <UserProfile /> },
         ],
       },
+
+      // Public slug catch-all — must stay last among /Layout children so a
+      // literal static path (/about, /events, etc.) always wins over it.
+      // See eventor-frontend-plan.md §2.
+      { path: "/:slug", element: <EventDetails /> },
 
       { path: "*", element: <Error /> },
     ],

@@ -2,14 +2,16 @@ import { createApi } from "@reduxjs/toolkit/query/react";
 import { authBaseQuery } from "../../utils/authBaseQuery";
 import type { TTicketTypePreset } from "../ticketTypes/ticketTypesAPI";
 
-export type TCategory = "Tech" | "Data Science" | "Web Dev";
+export type TCategory = "Tech" | "Data Science" | "Web Dev" | "Other";
 
 export type TEvents = {
   EventID: number;
+  slug: string; // server-generated at create time — never sent by the client
   title: string;
   description: string;
   VenueID: number;
   category: TCategory;
+  customCategory: string | null; // set only when category === "Other"; null otherwise
   date: string;
   time: string;
   ticketsPrice: number; // server-derived: lowest tier price — never sent by the client
@@ -20,6 +22,13 @@ export type TEvents = {
   image_url: string | null;
   image_public_id: string | null;
 };
+
+// Result of GET /event/slug/:slug. A "not found but here's the current slug"
+// response means the requested slug is stale (e.g. the event was retitled) —
+// the caller should redirect rather than 404.
+export type TEventBySlugResponse =
+  | { found: true; event: TEvents }
+  | { found: false; redirect: true; slug: string };
 
 // One row the host composes in the create-event form. `preset` is a
 // frontend-only hint (prefills `name`/`price`) and is never sent to the
@@ -45,12 +54,15 @@ type TTicketTypeRequest = {
   groupSize?: number | null;
 };
 
-// Event creation is one atomic request: event fields + the full ticketTypes
-// array. The backend computes ticketsPrice/totalTickets itself — this type
-// deliberately excludes those two fields from the client payload.
+// Event creation/update is one atomic request: event fields + (on create)
+// the full ticketTypes array. The backend computes ticketsPrice/totalTickets
+// and slug itself — this type deliberately excludes those from the client
+// payload. `customCategory` rides alongside `category`; the client is
+// responsible for nulling it out whenever category isn't "Other" (the
+// backend also enforces this, but we don't rely on that alone).
 export type TCreateEventPayload = Omit<
   Partial<TEvents>,
-  "ticketsPrice" | "totalTickets" | "EventID" | "soldTickets" | "createdAt" | "updatedAt"
+  "ticketsPrice" | "totalTickets" | "EventID" | "soldTickets" | "createdAt" | "updatedAt" | "slug"
 > & {
   ticketTypes: TTicketTypeInput[];
 };
@@ -89,6 +101,13 @@ export const eventsAPI = createApi({
       query: (id) => `/event/${id}`,
       providesTags: ["Events"],
     }),
+    // Powers the public /:slug route. A `found: false` response still comes
+    // back with the event's current slug so the caller can redirect to it
+    // instead of showing a dead link — see eventor-frontend-plan.md §2.
+    getEventBySlug: builder.query<TEventBySlugResponse, string>({
+      query: (slug) => `/event/slug/${slug}`,
+      providesTags: ["Events"],
+    }),
     getEventsByHostId: builder.query<{ Events: TEvents[] }, number>({
       query: (hostId) => `/event/host/${hostId}`,
       transformResponse: (response: { data: TEvents[] }) => ({ Events: response.data }),
@@ -113,6 +132,7 @@ export const {
   useCreateEventMutation,
   useGetAllEventsQuery,
   useGetEventByIdQuery,
+  useGetEventBySlugQuery,
   useGetEventsByHostIdQuery,
   useUpdateEventMutation,
   useDeleteEventMutation,

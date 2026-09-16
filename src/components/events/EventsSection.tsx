@@ -4,7 +4,6 @@ import { useGetAllEventsQuery } from "../../reducers/events/eventsAPI";
 import { useGetAllVenuesQuery } from "../../reducers/venues/venuesAPI";
 import type { TEvents } from "../../reducers/events/eventsAPI";
 import EventCard from "./EventCard";
-import EventModal from "./EventModal";
 import { CardGridSkeleton } from "../shared/Skeletons";
 
 // date is stored as "YYYY-MM-DD" — compare against local midnight so
@@ -22,12 +21,10 @@ function dateBucket(dateStr: string): "today" | "upcoming" | "past" {
 function EventGrid({
   events,
   venueMap,
-  onOpen,
   reloadEvents,
 }: {
   events: TEvents[];
   venueMap: Record<number, string>;
-  onOpen: (e: TEvents) => void;
   reloadEvents: () => void;
 }) {
   return (
@@ -38,7 +35,6 @@ function EventGrid({
           reloadEvents={reloadEvents}
           {...event}
           venueName={venueMap[event.VenueID] || "Unknown venue"}
-          onOpen={onOpen}
         />
       ))}
     </div>
@@ -48,7 +44,6 @@ function EventGrid({
 export default function EventsSection() {
   const { data: eventsData, isLoading, error, refetch } = useGetAllEventsQuery();
   const { data: venuesData } = useGetAllVenuesQuery();
-  const [selected, setSelected] = useState<TEvents | null>(null);
   const [showPast, setShowPast] = useState(false);
 
   const venueMap: Record<number, string> = {};
@@ -94,14 +89,14 @@ export default function EventsSection() {
                 Happening today
                 <span className="badge badge-primary badge-sm">{today.length}</span>
               </h2>
-              <EventGrid events={today} venueMap={venueMap} onOpen={setSelected} reloadEvents={refetch} />
+              <EventGrid events={today} venueMap={venueMap} reloadEvents={refetch} />
             </div>
           )}
 
           <div>
             <h2 className="font-display text-xl mb-4">Upcoming</h2>
             {upcoming.length > 0 ? (
-              <EventGrid events={upcoming} venueMap={venueMap} onOpen={setSelected} reloadEvents={refetch} />
+              <EventGrid events={upcoming} venueMap={venueMap} reloadEvents={refetch} />
             ) : (
               <p className="text-base-content/60 text-sm">No upcoming events scheduled.</p>
             )}
@@ -117,20 +112,11 @@ export default function EventsSection() {
                 <span className="badge badge-ghost badge-sm">{past.length}</span>
                 <ChevronDown size={18} className={`transition-transform ${showPast ? "rotate-180" : ""}`} />
               </button>
-              {showPast && (
-                <EventGrid events={past} venueMap={venueMap} onOpen={setSelected} reloadEvents={refetch} />
-              )}
+              {showPast && <EventGrid events={past} venueMap={venueMap} reloadEvents={refetch} />}
             </div>
           )}
         </div>
       )}
-
-      <EventModal
-        event={selected}
-        venueName={selected ? venueMap[selected.VenueID] || "Unknown venue" : ""}
-        onClose={() => setSelected(null)}
-        reloadEvents={refetch}
-      />
     </section>
   );
 }
