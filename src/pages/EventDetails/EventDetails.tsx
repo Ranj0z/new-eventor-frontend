@@ -89,7 +89,7 @@ export default function EventDetails() {
         <img
           src={event.image_url}
           alt=""
-          className="w-full h-64 object-cover rounded-box border border-base-300 mb-4"
+          className="w-full aspect-[16/10] object-cover rounded-box border border-base-300 mb-4"
         />
       )}
 
