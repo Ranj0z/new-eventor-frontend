@@ -39,7 +39,7 @@ export default function EventModal({ event, venueName, onClose, reloadEvents }: 
           <img
             src={event.image_url}
             alt=""
-            className="w-full h-48 object-cover rounded-box border border-base-300 mb-4"
+            className="block mx-auto w-auto max-w-full h-auto max-h-[500px] rounded-box border border-base-300 mb-4"
           />
         )}
 
@@ -55,7 +55,7 @@ export default function EventModal({ event, venueName, onClose, reloadEvents }: 
           <Tag size={12} className="mr-1" /> {event.category}
         </span>
 
-        <p className="text-base-content/70 mb-5 leading-relaxed">{event.description}</p>
+        <p className="text-base-content/70 mb-5 leading-relaxed whitespace-pre-line">{event.description}</p>
 
         <div className="space-y-2 text-sm mb-6">
           <p className="flex items-center gap-2">

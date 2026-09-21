@@ -7,8 +7,7 @@ import CreateRSVPModal from "../rsvp/CreateRSVPModal";
 const FALLBACK_IMAGE =
   "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=800&q=60";
 
-// "Under 10 left" — matches the same low-stock rule the details page's
-// ticket list will use (§4.1).
+// "10 or fewer left" — same low-stock rule as the details page ticket list.
 const LOW_STOCK_THRESHOLD = 10;
 
 type EventCardProps = TEvents & {
@@ -24,13 +23,13 @@ export default function EventCard(props: EventCardProps) {
 
   const remaining = totalTickets - soldTickets;
   const soldOut = remaining <= 0;
-  const lowStock = !soldOut && remaining < LOW_STOCK_THRESHOLD;
+  const lowStock = !soldOut && remaining <= LOW_STOCK_THRESHOLD;
 
   return (
     <div className="bg-base-100 border border-base-300 rounded-box overflow-hidden hover:shadow-md transition-shadow">
       <Link to={`/${slug}`} className="block text-left">
         <div className="relative">
-          <img src={image_url || FALLBACK_IMAGE} alt={title} className="w-full h-40 object-cover" />
+          <img src={image_url || FALLBACK_IMAGE} alt={title} className="w-full h-40 object-contain bg-base-200" />
           {lowStock && (
             <span className="badge badge-warning badge-sm absolute top-2 right-2">{remaining} left</span>
           )}

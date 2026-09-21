@@ -28,7 +28,7 @@ export default function Venues() {
             <img
               src={venue.image_url || FALLBACK_IMAGE}
               alt={venue.venueName}
-              className="w-full h-36 object-cover"
+              className="block mx-auto w-auto max-w-full h-auto max-h-80"
             />
             <div className="p-4 space-y-1 text-sm">
               <h3 className="font-medium text-base">{venue.venueName}</h3>

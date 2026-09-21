@@ -38,7 +38,7 @@ export default function EventImageCarousel({ images }: EventImageCarouselProps) 
       <img
         src={images[0].url}
         alt=""
-        className="w-full aspect-[4/3] object-cover rounded-box border border-base-300"
+        className="block mx-auto w-auto max-w-full h-auto max-h-[500px] rounded-box border border-base-300"
       />
     );
   }
@@ -48,8 +48,8 @@ export default function EventImageCarousel({ images }: EventImageCarouselProps) 
       <div className="overflow-hidden rounded-box border border-base-300" ref={emblaRef}>
         <div className="flex">
           {images.map((image) => (
-            <div key={image.id} className="flex-[0_0_100%] min-w-0">
-              <img src={image.url} alt="" className="w-full aspect-[4/3] object-cover" />
+            <div key={image.id} className="flex-[0_0_100%] min-w-0 flex items-center justify-center">
+              <img src={image.url} alt="" className="block w-auto max-w-full h-auto max-h-[500px]" />
             </div>
           ))}
         </div>

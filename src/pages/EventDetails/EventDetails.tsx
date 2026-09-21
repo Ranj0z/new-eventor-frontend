@@ -16,7 +16,7 @@ const LOW_STOCK_THRESHOLD = 10;
 function TicketRow({ ticketType }: { ticketType: TTicketType }) {
   const remaining = ticketType.totalQuantity - ticketType.soldQuantity;
   const soldOut = remaining <= 0;
-  const lowStock = !soldOut && remaining < LOW_STOCK_THRESHOLD;
+  const lowStock = !soldOut && remaining <= LOW_STOCK_THRESHOLD;
 
   return (
     <div className="flex items-center justify-between border border-base-300 rounded-box p-3">
@@ -31,9 +31,7 @@ function TicketRow({ ticketType }: { ticketType: TTicketType }) {
           <span className="badge badge-ghost badge-sm">Sold out</span>
         ) : lowStock ? (
           <span className="badge badge-warning badge-sm">{remaining} left</span>
-        ) : (
-          <span className="text-sm text-base-content/60">{remaining} available</span>
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -89,7 +87,7 @@ export default function EventDetails() {
         <img
           src={event.image_url}
           alt=""
-          className="w-full aspect-[16/10] object-cover rounded-box border border-base-300 mb-4"
+          className="block mx-auto w-auto max-w-full h-auto max-h-[500px] rounded-box border border-base-300 mb-4"
         />
       )}
 
@@ -121,7 +119,7 @@ export default function EventDetails() {
 
       <div className="mb-8">
         <h2 className="font-display text-xl mb-2">What to expect</h2>
-        <p className="leading-relaxed text-base-content/80">{event.description}</p>
+        <p className="leading-relaxed text-base-content/80 whitespace-pre-line">{event.description}</p>
       </div>
 
       {visibleTicketTypes.length > 0 && (
