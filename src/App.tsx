@@ -34,8 +34,8 @@ import AdminVenues from "./pages/Admin/Dashboard/Venues/Venues";
 import AdminRSVPs from "./pages/Admin/Dashboard/RSVPs/RSVPs";
 import AdminPayments from "./pages/Admin/Dashboard/Payments/Payments";
 import AdminSupportTickets from "./pages/Admin/Dashboard/SupportTickets/SupportTickets";
-import AdminWithdrawals from "./pages/Admin/Dashboard/Withdrawals/Withdrawals";
-import AdminWallet from "./pages/Admin/Dashboard/Wallet/Wallet";
+import AdminWithdrawals from "./pages/Admin/Dashboard/Withdrawals/AdminWithdrawals";
+import AdminWallet from "./pages/Admin/Dashboard/Wallet/AdminWallet";
 import AdminAnalytics from "./pages/Admin/Dashboard/Analytics/Analytics";
 import AdminProfile from "./pages/Admin/Dashboard/Profile/Profile";
 
