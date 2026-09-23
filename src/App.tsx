@@ -5,6 +5,7 @@ import {
   MapPin,
   Ticket,
   Wallet,
+  Receipt,
   LifeBuoy,
   BarChart3,
   UserCircle,
@@ -33,6 +34,8 @@ import AdminVenues from "./pages/Admin/Dashboard/Venues/Venues";
 import AdminRSVPs from "./pages/Admin/Dashboard/RSVPs/RSVPs";
 import AdminPayments from "./pages/Admin/Dashboard/Payments/Payments";
 import AdminSupportTickets from "./pages/Admin/Dashboard/SupportTickets/SupportTickets";
+import AdminWithdrawals from "./pages/Admin/Dashboard/Withdrawals/Withdrawals";
+import AdminWallet from "./pages/Admin/Dashboard/Wallet/Wallet";
 import AdminAnalytics from "./pages/Admin/Dashboard/Analytics/Analytics";
 import AdminProfile from "./pages/Admin/Dashboard/Profile/Profile";
 
@@ -40,6 +43,7 @@ import HostMyEvents from "./pages/Host/Dashboard/MyEvents/MyEvents";
 import HostEventHistory from "./pages/Host/Dashboard/EventHistory/EventHistory";
 import HostRSVPs from "./pages/Host/Dashboard/RSVPs/RSVPs";
 import HostPayments from "./pages/Host/Dashboard/Payments/Payments";
+import HostWallet from "./pages/Host/Dashboard/Wallet/Wallet";
 import HostProfile from "./pages/Host/Dashboard/Profile/Profile";
 
 import UserEvents from "./pages/User/Dashboard/Events/Events";
@@ -53,7 +57,9 @@ const adminNav: DashboardNavItem[] = [
   { to: "/admin/dashboard/events", label: "Events", icon: CalendarDays },
   { to: "/admin/dashboard/venues", label: "Venues", icon: MapPin },
   { to: "/admin/dashboard/rsvps", label: "RSVPs", icon: Ticket },
-  { to: "/admin/dashboard/payments", label: "Payments", icon: Wallet },
+  { to: "/admin/dashboard/payments", label: "Payments", icon: Receipt },
+  { to: "/admin/dashboard/withdrawals", label: "Withdrawals", icon: Ticket },
+  { to: "/admin/dashboard/wallet", label: "Wallets", icon: Wallet },
   { to: "/admin/dashboard/support-tickets", label: "Support tickets", icon: LifeBuoy },
   { to: "/admin/dashboard/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/admin/dashboard/profile", label: "Profile", icon: UserCircle },
@@ -63,7 +69,8 @@ const hostNav: DashboardNavItem[] = [
   { to: "/host/dashboard/my-events", label: "My events", icon: CalendarDays },
   { to: "/host/dashboard/event-history", label: "Event history", icon: History },
   { to: "/host/dashboard/rsvps", label: "RSVPs", icon: Ticket },
-  { to: "/host/dashboard/payments", label: "Payments", icon: Wallet },
+  { to: "/host/dashboard/payments", label: "Payments", icon: Receipt },
+  { to: "/host/dashboard/wallet", label: "Wallet", icon: Wallet },
   { to: "/host/dashboard/profile", label: "Profile", icon: UserCircle },
 ];
 
@@ -112,6 +119,8 @@ const router = createBrowserRouter([
           { path: "venues", element: <AdminVenues /> },
           { path: "rsvps", element: <AdminRSVPs /> },
           { path: "payments", element: <AdminPayments /> },
+          { path: "withdrawals", element: <AdminWithdrawals /> },
+          { path: "wallet", element: <AdminWallet /> },
           { path: "support-tickets", element: <AdminSupportTickets /> },
           { path: "analytics", element: <AdminAnalytics /> },
           { path: "profile", element: <AdminProfile /> },
@@ -131,6 +140,7 @@ const router = createBrowserRouter([
           { path: "event-history", element: <HostEventHistory /> },
           { path: "rsvps", element: <HostRSVPs /> },
           { path: "payments", element: <HostPayments /> },
+          { path: "wallet", element: <HostWallet /> },
           { path: "profile", element: <HostProfile /> },
         ],
       },

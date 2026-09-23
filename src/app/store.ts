@@ -13,6 +13,7 @@ import { ticketTypesAPI } from "../reducers/ticketTypes/ticketTypesAPI";
 import { paymentsAPI } from "../reducers/payments/paymentsAPI";
 import { uploadsAPI } from "../reducers/uploads/uploadsAPI";
 import { eventImagesAPI } from "../reducers/eventImages/eventImagesAPI";
+import { walletAPI } from "../reducers/wallet/walletAPI";
 
 // Only the auth session persists to localStorage — every RTK Query cache
 // refetches fresh on load. See eventor-state-architecture.md §5.
@@ -35,6 +36,7 @@ const rootReducer = combineReducers({
   [paymentsAPI.reducerPath]: paymentsAPI.reducer,
   [uploadsAPI.reducerPath]: uploadsAPI.reducer,
   [eventImagesAPI.reducerPath]: eventImagesAPI.reducer,
+  [walletAPI.reducerPath]: walletAPI.reducer,
 });
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);
@@ -52,7 +54,8 @@ export const store = configureStore({
       .concat(ticketTypesAPI.middleware)
       .concat(paymentsAPI.middleware)
       .concat(uploadsAPI.middleware)
-      .concat(eventImagesAPI.middleware),
+      .concat(eventImagesAPI.middleware)
+      .concat(walletAPI.middleware),
 });
 
 export const persistedStore = persistStore(store);
