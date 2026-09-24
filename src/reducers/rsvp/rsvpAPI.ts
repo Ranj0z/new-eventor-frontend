@@ -27,6 +27,11 @@ export type TRSVP = {
   // paymentsAPI.initiatePayment without a separate RSVPID -> PaymentID
   // lookup.
   PaymentID: number | null;
+  // Partial-payments events only — null on regular events. Unique per event.
+  idNumber: string | null;
+  // Running total of confirmed installments; 0 on full-payment events or
+  // before any payment. `paid` stays the authoritative "fully settled" flag.
+  amountPaid: number;
 };
 
 // Cart-checkout request shape — matches backend's validateCart /
@@ -36,6 +41,8 @@ export type TCartAttendee = {
   lastName: string;
   email: string;
   phoneNumber: string;
+  // Only sent on partialPaymentsEnabled events.
+  idNumber?: string;
 };
 
 export type TCartLine = {

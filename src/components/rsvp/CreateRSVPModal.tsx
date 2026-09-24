@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { X, CalendarDays, Plus, Minus } from "lucide-react";
 import { useSelector, useDispatch } from "react-redux";
+import { Link, useNavigate } from "react-router-dom";
 import type { RootState } from "../../app/store";
 import type { TEvents } from "../../reducers/events/eventsAPI";
 import type { TRSVP, TCartLine } from "../../reducers/rsvp/rsvpAPI";
@@ -16,7 +17,7 @@ import { isValidKenyanPhone } from "../../utils/phoneValidation";
 import GuestRSVPLinkModal from "./GuestRSVPLinkModal";
 import PaymentModal from "../payment/PaymentModal";
 
-type Step = "build" | "authChoice" | "login" | "register" | "verify" | "payment" | "done";
+type Step = "build" | "authChoice" | "login" | "register" | "verify" | "payment" | "partialDone" | "done";
 
 type CreateRSVPModalProps = {
   event: TEvents;
@@ -29,6 +30,7 @@ type CartAttendeeDraft = {
   lastName: string;
   email: string;
   phoneNumber: string;
+  idNumber: string; // only collected/sent on partialPaymentsEnabled events
 };
 
 type CartLineDraft = {
@@ -48,9 +50,10 @@ const blankAttendee = (): CartAttendeeDraft => ({
   lastName: "",
   email: "",
   phoneNumber: "",
+  idNumber: "",
 });
 
-function validateAttendee(a: CartAttendeeDraft): string[] {
+function validateAttendee(a: CartAttendeeDraft, requireIdNumber = false): string[] {
   const errors: string[] = [];
   const first = a.firstName.trim();
   const last = a.lastName.trim();
@@ -62,6 +65,8 @@ function validateAttendee(a: CartAttendeeDraft): string[] {
   if (!isValidKenyanPhone(a.phoneNumber)) {
     errors.push("Enter a valid phone number (07XXXXXXXX, 01XXXXXXXX, or 254XXXXXXXXX).");
   }
+  // No format check — the backend enforces uniqueness per event.
+  if (requireIdNumber && !a.idNumber.trim()) errors.push("ID number is required.");
   return errors;
 }
 
@@ -71,6 +76,11 @@ function validateAttendee(a: CartAttendeeDraft): string[] {
 // §5 for a multi-ticket-type cart instead of a single fixed-quantity line.
 export default function CreateRSVPModal({ event, onClose, reloadEvents }: CreateRSVPModalProps) {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
+  // Partial-payment events: one ticket type, quantity locked to 1, ID number
+  // collected, and payment happens afterwards at /rsvp/lookup instead of in
+  // PaymentModal (which assumes a single full Payment row).
+  const partial = event.partialPaymentsEnabled;
   const sessionUser = useSelector((state: RootState) => state.user.user);
 
   const [step, setStep] = useState<Step>("build");
@@ -107,6 +117,7 @@ export default function CreateRSVPModal({ event, onClose, reloadEvents }: Create
 
   const [createdRSVPs, setCreatedRSVPs] = useState<TRSVP[] | null>(null);
   const [createdPayment, setCreatedPayment] = useState<{ PaymentID: number; amount: string } | null>(null);
+  const [createdIdNumber, setCreatedIdNumber] = useState("");
   const [pendingUnlinked, setPendingUnlinked] = useState<TRSVP[] | null>(null);
   const [pendingUserId, setPendingUserId] = useState<number | null>(null);
 
@@ -116,7 +127,7 @@ export default function CreateRSVPModal({ event, onClose, reloadEvents }: Create
   const [verify, { isLoading: verifyLoading, error: verifyError }] = useVerifyMutation();
 
   const cartLines = Object.values(cart).filter((l) => l.quantity > 0);
-  const allAttendeesValid = cartLines.every((l) => l.attendees.every((a) => validateAttendee(a).length === 0));
+  const allAttendeesValid = cartLines.every((l) => l.attendees.every((a) => validateAttendee(a, partial).length === 0));
   const canContinue = cartLines.length > 0 && allAttendeesValid;
 
   // Used to prefill the login/register forms once the cart is built — the
@@ -142,6 +153,7 @@ export default function CreateRSVPModal({ event, onClose, reloadEvents }: Create
               lastName: sessionUser.lastName,
               email: sessionUser.email,
               phoneNumber: sessionUser.phoneNumber,
+              idNumber: "",
             });
           } else {
             additions.push(blankAttendee());
@@ -185,12 +197,87 @@ export default function CreateRSVPModal({ event, onClose, reloadEvents }: Create
     });
   };
 
+  // Partial-payment mode: radio-style single selection. Carries the attendee
+  // over when switching tiers so nothing already typed is lost.
+  const selectTicketType = (ticketTypeId: number) => {
+    if (cart[ticketTypeId]) return;
+    const carried = cartLines[0]?.attendees[0];
+    const attendee: CartAttendeeDraft =
+      carried ??
+      (sessionUser
+        ? {
+            firstName: sessionUser.firstName,
+            lastName: sessionUser.lastName,
+            email: sessionUser.email,
+            phoneNumber: sessionUser.phoneNumber,
+            idNumber: "",
+          }
+        : blankAttendee());
+    setCart({ [ticketTypeId]: { TicketTypeID: ticketTypeId, quantity: 1, attendees: [attendee] } });
+  };
+
   const markTouched = (ticketTypeId: number, index: number) => {
     setTouchedAttendees((prev) => new Set(prev).add(`${ticketTypeId}:${index}`));
   };
 
   const scrollToBlock = (ticketTypeId: number) => {
     document.getElementById(`ticket-block-${ticketTypeId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
+  const renderAttendeeFields = (ticketTypeId: number, i: number, a: CartAttendeeDraft) => {
+    const touchKey = `${ticketTypeId}:${i}`;
+    const touched = touchedAttendees.has(touchKey);
+    const errors = touched ? validateAttendee(a, partial) : [];
+    return (
+      <div key={i} id={`attendee-${ticketTypeId}-${i}`} className="space-y-1.5">
+        <p className="text-xs font-medium text-base-content/60">Attendee {i + 1}</p>
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            placeholder="First name"
+            className="input input-bordered input-sm w-full"
+            value={a.firstName}
+            onChange={(e) => updateAttendee(ticketTypeId, i, { firstName: e.target.value })}
+            onBlur={() => markTouched(ticketTypeId, i)}
+          />
+          <input
+            placeholder="Last name"
+            className="input input-bordered input-sm w-full"
+            value={a.lastName}
+            onChange={(e) => updateAttendee(ticketTypeId, i, { lastName: e.target.value })}
+            onBlur={() => markTouched(ticketTypeId, i)}
+          />
+        </div>
+        <input
+          type="email"
+          placeholder="Email"
+          className="input input-bordered input-sm w-full"
+          value={a.email}
+          onChange={(e) => updateAttendee(ticketTypeId, i, { email: e.target.value })}
+          onBlur={() => markTouched(ticketTypeId, i)}
+        />
+        <input
+          placeholder="Phone (07XXXXXXXX)"
+          className="input input-bordered input-sm w-full"
+          value={a.phoneNumber}
+          onChange={(e) => updateAttendee(ticketTypeId, i, { phoneNumber: e.target.value })}
+          onBlur={() => markTouched(ticketTypeId, i)}
+        />
+        {partial && (
+          <input
+            placeholder="ID number"
+            className="input input-bordered input-sm w-full"
+            value={a.idNumber}
+            onChange={(e) => updateAttendee(ticketTypeId, i, { idNumber: e.target.value })}
+            onBlur={() => markTouched(ticketTypeId, i)}
+          />
+        )}
+        {errors.map((err) => (
+          <p key={err} className="text-error text-xs">
+            {err}
+          </p>
+        ))}
+      </div>
+    );
   };
 
   const submitRSVP = async (userId: number | null) => {
@@ -204,6 +291,7 @@ export default function CreateRSVPModal({ event, onClose, reloadEvents }: Create
           lastName: a.lastName.trim(),
           email: a.email.trim(),
           phoneNumber: a.phoneNumber,
+          ...(partial && { idNumber: a.idNumber.trim() }),
         })),
       }));
 
@@ -211,7 +299,12 @@ export default function CreateRSVPModal({ event, onClose, reloadEvents }: Create
       setCreatedRSVPs(res.rsvps);
       setCreatedPayment(res.payment); // null => free order — fixes the prior totalAmount bug directly
       reloadEvents();
-      setStep(res.payment ? "payment" : "done");
+      if (partial && Number(res.rsvps[0]?.totalAmount) > 0) {
+        setCreatedIdNumber(cartPayload[0].attendees[0].idNumber ?? "");
+        setStep("partialDone");
+      } else {
+        setStep(res.payment ? "payment" : "done");
+      }
     } catch {
       // error surfaced via rsvpError below; stay on current step
     }
@@ -313,6 +406,52 @@ export default function CreateRSVPModal({ event, onClose, reloadEvents }: Create
               <p className="text-sm text-error">No ticket types available for this event.</p>
             )}
 
+            {partial && (
+              <div className="space-y-3">
+                <p className="text-xs text-base-content/60">
+                  This event accepts installment payments — book now, pay in parts afterwards.
+                </p>
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {activeTicketTypes.map((t) => {
+                    const remaining = t.totalQuantity - t.soldQuantity;
+                    const soldOut = remaining <= 0;
+                    const selected = !!cart[t.TicketTypeID];
+                    return (
+                      <label
+                        key={t.TicketTypeID}
+                        className={`flex items-center gap-3 rounded-box border p-3 cursor-pointer ${
+                          selected ? "border-primary" : "border-base-300"
+                        } ${soldOut ? "opacity-50 cursor-not-allowed" : ""}`}
+                      >
+                        <input
+                          type="radio"
+                          name="ticket-type"
+                          className="radio radio-primary radio-sm"
+                          checked={selected}
+                          disabled={soldOut}
+                          onChange={() => selectTicketType(t.TicketTypeID)}
+                        />
+                        <div>
+                          <p className="font-medium text-sm">{t.name}</p>
+                          <p className="text-xs text-base-content/60">
+                            {Number(t.price) > 0 ? `KES ${Number(t.price).toLocaleString()}` : "Free"}
+                            {" · "}
+                            {soldOut ? "Sold out" : `${remaining} left`}
+                          </p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+                {cartLines[0] && (
+                  <div id={`ticket-block-${cartLines[0].TicketTypeID}`} className="space-y-3 pt-2 border-t border-base-300">
+                    {cartLines[0].attendees.map((a, i) => renderAttendeeFields(cartLines[0].TicketTypeID, i, a))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!partial && (
             <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
               {activeTicketTypes.map((t) => {
                 const line = cart[t.TicketTypeID];
@@ -360,58 +499,14 @@ export default function CreateRSVPModal({ event, onClose, reloadEvents }: Create
 
                     {quantity > 0 && line && (
                       <div className="space-y-3 pt-2 border-t border-base-300">
-                        {line.attendees.map((a, i) => {
-                          const touchKey = `${t.TicketTypeID}:${i}`;
-                          const touched = touchedAttendees.has(touchKey);
-                          const errors = touched ? validateAttendee(a) : [];
-                          return (
-                            <div key={i} id={`attendee-${t.TicketTypeID}-${i}`} className="space-y-1.5">
-                              <p className="text-xs font-medium text-base-content/60">Attendee {i + 1}</p>
-                              <div className="grid grid-cols-2 gap-2">
-                                <input
-                                  placeholder="First name"
-                                  className="input input-bordered input-sm w-full"
-                                  value={a.firstName}
-                                  onChange={(e) => updateAttendee(t.TicketTypeID, i, { firstName: e.target.value })}
-                                  onBlur={() => markTouched(t.TicketTypeID, i)}
-                                />
-                                <input
-                                  placeholder="Last name"
-                                  className="input input-bordered input-sm w-full"
-                                  value={a.lastName}
-                                  onChange={(e) => updateAttendee(t.TicketTypeID, i, { lastName: e.target.value })}
-                                  onBlur={() => markTouched(t.TicketTypeID, i)}
-                                />
-                              </div>
-                              <input
-                                type="email"
-                                placeholder="Email"
-                                className="input input-bordered input-sm w-full"
-                                value={a.email}
-                                onChange={(e) => updateAttendee(t.TicketTypeID, i, { email: e.target.value })}
-                                onBlur={() => markTouched(t.TicketTypeID, i)}
-                              />
-                              <input
-                                placeholder="Phone (07XXXXXXXX)"
-                                className="input input-bordered input-sm w-full"
-                                value={a.phoneNumber}
-                                onChange={(e) => updateAttendee(t.TicketTypeID, i, { phoneNumber: e.target.value })}
-                                onBlur={() => markTouched(t.TicketTypeID, i)}
-                              />
-                              {errors.map((err) => (
-                                <p key={err} className="text-error text-xs">
-                                  {err}
-                                </p>
-                              ))}
-                            </div>
-                          );
-                        })}
+                        {line.attendees.map((a, i) => renderAttendeeFields(t.TicketTypeID, i, a))}
                       </div>
                     )}
                   </div>
                 );
               })}
             </div>
+            )}
 
             {cartLines.length > 0 && (
               <div>
@@ -430,7 +525,8 @@ export default function CreateRSVPModal({ event, onClose, reloadEvents }: Create
                         <div key={line.TicketTypeID}>
                           <div className="flex justify-between items-center font-medium">
                             <span>
-                              {t?.name ?? "Ticket"} × {line.quantity}
+                              {t?.name ?? "Ticket"}
+                              {!partial && ` × ${line.quantity}`}
                             </span>
                             <button
                               type="button"
@@ -605,6 +701,27 @@ export default function CreateRSVPModal({ event, onClose, reloadEvents }: Create
             event={event}
             onClose={() => setStep("done")}
           />
+        )}
+
+        {step === "partialDone" && (
+          <div className="space-y-4">
+            <p className="text-sm text-base-content/70">
+              Your RSVP is confirmed. Use your ID number <strong>{createdIdNumber}</strong> at{" "}
+              <Link to="/rsvp/lookup" className="text-primary">
+                /rsvp/lookup
+              </Link>{" "}
+              to make your first payment.
+            </p>
+            <button
+              className="btn btn-primary w-full"
+              onClick={() => navigate(`/rsvp/lookup?idNumber=${encodeURIComponent(createdIdNumber)}`)}
+            >
+              Pay now
+            </button>
+            <button className="btn btn-ghost w-full" onClick={onClose}>
+              Done
+            </button>
+          </div>
         )}
 
         {step === "done" && (

@@ -325,9 +325,18 @@ function RSVPRow({ r, onEdit }: { r: TRSVP; onEdit: (r: TRSVP) => void }) {
       <td>{r.RSVPDate}</td>
       <td className="text-right">{formatAmount(r.totalAmount)}</td>
       <td>
-        <span className={`badge badge-sm ${r.paid ? "badge-success badge-soft" : "badge-ghost"}`}>
-          {r.paid ? "Paid" : "Unpaid"}
-        </span>
+        {r.paid ? (
+          <span className="badge badge-sm badge-success badge-soft">Paid</span>
+        ) : Number(r.amountPaid) > 0 ? (
+          <div className="flex flex-col items-start gap-0.5">
+            <span className="badge badge-sm badge-warning">Partial</span>
+            <span className="text-xs text-base-content/60">
+              KES {Number(r.amountPaid).toLocaleString()} / {Number(r.totalAmount).toLocaleString()}
+            </span>
+          </div>
+        ) : (
+          <span className="badge badge-sm badge-ghost">Unpaid</span>
+        )}
       </td>
       <td>
         <span className={`badge badge-sm ${statusBadge[r.RSVPStatus]}`}>{r.RSVPStatus}</span>

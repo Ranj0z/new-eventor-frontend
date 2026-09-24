@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { CalendarDays, MapPin, Tag, Ticket as TicketIcon } from "lucide-react";
 import { useGetEventBySlugQuery } from "../../reducers/events/eventsAPI";
 import { useGetVenueByIdQuery } from "../../reducers/venues/venuesAPI";
@@ -138,6 +138,12 @@ export default function EventDetails() {
       <button className="btn btn-primary w-full" disabled={soldOut} onClick={() => setRsvpOpen(true)}>
         {soldOut ? "Sold out" : "RSVP"}
       </button>
+
+      {event.partialPaymentsEnabled && (
+        <Link to="/rsvp/lookup" className="text-primary text-sm block text-center mt-3">
+          Already have an RSVP? Check your balance →
+        </Link>
+      )}
 
       {rsvpOpen && (
         <CreateRSVPModal event={event} reloadEvents={refetch} onClose={() => setRsvpOpen(false)} />

@@ -27,6 +27,7 @@ import ForgotPassword from "./pages/ForgotPassword/ForgotPassword";
 import ResetPassword from "./pages/ForgotPassword/ResetPassword";
 import Error from "./pages/Error/Error";
 import EventDetails from "./pages/EventDetails/EventDetails";
+import RSVPLookup from "./pages/RSVPLookup/RSVPLookup";
 
 import AdminUsers from "./pages/Admin/Dashboard/Users/Users";
 import AdminEvents from "./pages/Admin/Dashboard/Events/Events";
@@ -104,6 +105,8 @@ const router = createBrowserRouter([
       { path: "/register/verify", element: <Verify /> },
       { path: "/forgot-password", element: <ForgotPassword /> },
       { path: "/reset-password", element: <ResetPassword /> },
+      // Public (no ProtectedRoute) — must sit above the /:slug catch-all below.
+      { path: "/rsvp/lookup", element: <RSVPLookup /> },
 
       {
         path: "/admin/dashboard",

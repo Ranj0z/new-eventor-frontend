@@ -21,6 +21,7 @@ export type TEvents = {
   updatedAt: string | null;
   image_url: string | null;
   image_public_id: string | null;
+  partialPaymentsEnabled: boolean;
 };
 
 // Result of GET /event/slug/:slug. A "not found but here's the current slug"
